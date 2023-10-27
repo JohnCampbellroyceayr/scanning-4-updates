@@ -1,0 +1,648 @@
+[PCOMM SCRIPT HEADER]
+LANGUAGE=VBSCRIPT
+DESCRIPTION=
+[PCOMM SCRIPT SOURCE]
+OPTION EXPLICIT
+autECLSession.SetConnectionByName(ThisSessionName)
+
+'declare classes
+    Dim File
+    Set File = New FileClass
+    Dim Screen
+    Set Screen = New ScreenClass
+    Dim Input
+    Set Input = New InputClass
+    Dim Commands
+    Set Commands = New CommandClass
+    Dim Text
+    Set Text = New TextClass
+
+
+
+Dim deviceEmployee, Employee, deviceMachine, Machine, config
+
+Set deviceEmployee = new JSONClass
+Set Employee = new JSONClass
+
+Set deviceMachine = new JSONClass
+Set Machine = new JSONClass
+
+Set config = new JSONClass
+
+
+
+deviceEmployee.Load(File.read(File.buildPath("scanning files/employee/employee.json")))
+deviceMachine.Load(File.read(File.buildPath("scanning files/machine/machine.json")))
+config.Load(File.read(File.buildPath("scanning files/config/config.json")))
+
+Employee.Load(getEmployeeServer(deviceEmployee.Object.Number))
+Machine.Load(getMachineServer(deviceEmployee.Object.CurrentMachine))
+
+begin
+
+sub begin()
+    Dim result, machineGroup
+    if Employee.Object.Number <> "null" Then
+        Dim Message, machineName
+        machineName = Machine.Object.Machine
+        Message = "Current sign-in: " & Text.displayNoneIfNull(Employee.Object.Number) & " " & Text.removeIfNull(Employee.Object.Name) & vbCrLf
+        Message = Message & "Current Machine: " & Text.displayNoneIfNull(machineName)
+        result = Trim(InputBox(Message, "Please Enter Machine code", Text.removeIfNull(machineName)))
+        If result <> "" Then
+            Dim EmployeeStr
+            machineGroup = findMachineGroup(result)
+            if machineGroup = "false" Then
+                MsgBox("Could Not Find Machine " & result)
+                exit sub
+            else
+                
+            end if
+        Else
+            exit sub
+        End If
+    else
+        msgbox("No Employee Signed in, Please sign in before selecting a machine")
+        exit sub
+    end if
+
+    autECLSession.autECLOIA.WaitForAppAvailable
+    autECLSession.autECLOIA.WaitForInputReady
+    if Screen.check(36, 1, "Sign On") Then
+        Input.setCursor 53, 6
+        Dim user, password
+        user = config.Object.UserName
+        password = getPassword(user)
+        if Len(user) < 10 And password <> "" Then
+            if Trim(user) <> "" Then
+                Input.text(user)
+                Input.key("[fldext]")
+                Input.text(password)
+                Input.key("[enter]")
+                if Screen.check(24, 1, "Attempt to Recover Interactive Job") Then
+                    Input.setCursor 7, 22
+                    Input.text("90")
+                    Input.key("[enter]")
+                    Input.key("[enter]")
+                    login()
+                    exit sub
+                end if
+                if Screen.check(36, 1, "Sign On") <> true Then
+                    Input.key("[pf12]")
+                end if
+            end if
+        else
+            MsgBox("Incorrect Password or Unable to connect to server")
+            exit sub
+        end if
+    else
+        prepareRun false, result, machineGroup
+        exit sub
+    end if
+    prepareRun true, result, machineGroup
+    if Screen.check(34, 3, "CMS Main Menu") Then
+        Input.setCursor 7, 20
+        Input.text("90")
+        Input.key("[enter]")
+    end if
+end sub
+function getPassword(user) 
+    Dim fileContents, lines, line
+    fileContents = File.read("\\192.168.0.13\Engdrawing\Inspection Logs\Scanning Files\AS400 creds\logins.txt")
+    if Trim(fileContents) <> "" Then
+        lines = Split(fileContents, vbCrLf)
+
+        for each line in lines
+            Dim userPasswordArr
+            userPasswordArr = Split(line, "|")
+            if Trim(userPasswordArr(0)) = user Then
+                getPassword = userPasswordArr(1)
+                exit function
+            end if
+        next
+    end if
+    getPassword = ""
+end function
+
+function getEmployeeServer(number)
+    Dim path, noEmployeePath, fileContent
+    path = "\\192.168.0.13\Engdrawing\Inspection Logs\Scanning Files\employees\Employees\" & number & ".json"
+    noEmployeePath = "\\192.168.0.13\Engdrawing\Inspection Logs\Scanning Files\employees\noEmployee.json"
+    fileContent = file.read(path)
+    if Trim(fileContent) <> "" Then
+        getEmployeeServer = fileContent
+    else
+        getEmployeeServer = file.read(noEmployeePath)
+    end if
+end function
+
+function getMachineServer(machine)
+    Dim path, noMachinePath, fileContent
+    path = "\\192.168.0.13\Engdrawing\Inspection Logs\Scanning Files\machines\Machines\" & machine & ".json"
+    noMachinePath = "\\192.168.0.13\Engdrawing\Inspection Logs\Scanning Files\machines\noMachine.json"
+    fileContent = file.read(path)
+    if Trim(fileContent) <> "" And machine <> "null" Then
+        getMachineServer = fileContent
+    else
+        getMachineServer = file.read(noMachinePath)
+    end if
+end function
+
+sub prepareRun(startFromSignin, result, machineGroup)
+    if Screen.check(34, 3, "CMS Main Menu") or startFromSignin = true Then
+        Input.setCursor 7, 20
+        setMachine  result, machineGroup
+    else
+        MsgBox("Please start on the CMS Main Menu or Sign in menu")
+    end if
+end sub
+function findName(number)
+    findName = "false"
+end function
+
+sub setMachine(result, machineGroup)
+    Dim newMachine
+    Set newMachine = new JSONClass
+    newMachine.Load(getMachineServer(result))
+    if newMachine.Object.Machine = "null" Then
+        Machine.Object.Machine = result
+        Machine.Object.MachineGroup = machineGroup
+        Machine.Object.Status = "Idle"
+    else
+        Set Machine = newMachine
+    end if
+    setEmployeeAsCurrentUser()
+    setMachineAsCurrentMachine(result)
+    File.write File.buildPath("scanning files/employee/employee.json"), Employee.stringify()
+    setEmployeeOnServer(Employee)
+    saveMachine(Machine)
+    startShift Machine.Object.Machine, Employee.Object.Number
+end sub
+
+sub setMachineAsCurrentMachine(machineName)
+    Dim otherMachines, otherMachinesArr, machine, str
+    otherMachines = Replace(Employee.Object.OtherMachines, "<Array>", "")
+    otherMachinesArr = Split(otherMachines, "|")
+    for each machine in otherMachinesArr
+        if machine <> "null" And Trim(machine) <> "" And machine <> machineName Then
+            str = str & machine & "|"
+        end if
+    next
+    if Employee.Object.CurrentMachine <> machineName Then
+        Employee.Object.OtherMachines = "<Array>" & str & Employee.Object.CurrentMachine
+    else
+        If Right(Employee.Object.OtherMachines, 1) = "|" Then
+            Employee.Object.OtherMachines = Left(Employee.Object.OtherMachines, Len(Employee.Object.OtherMachines) - 1)
+        End If
+    end if
+    Employee.Object.CurrentMachine = machineName 
+end sub
+
+sub setEmployeeAsCurrentUser()
+    Dim oldUser, oldUserNumber 
+    oldUserNumber = Machine.Object.User
+    Set oldUser = new JSONClass
+    oldUser.Load(getEmployeeServer(oldUserNumber))
+    if oldUser.Object.Number <> "null" And oldUser.Object.Number <> Employee.Object.Number Then
+        if oldUser.Object.OtherMachines <> "<Array>null" Then
+            Dim otherMachines
+            otherMachines = Split(Replace(oldUser.Object.OtherMachines, "<Array>", ""), "|")
+            oldUser.Object.CurrentMachine = otherMachines(0)
+            oldUser.Object.OtherMachines = Replace(oldUser.Object.OtherMachines, otherMachines(0), "")
+            oldUser.Object.OtherMachines = Replace(oldUser.Object.OtherMachines, "<Array>|", "<Array>")
+            if oldUser.Object.OtherMachines = "<Array>" Then
+                oldUser.Object.OtherMachines = "<Array>null"
+            end if
+        else
+            oldUser.Object.CurrentMachine = "null"
+        end if
+        setEmployeeOnServer(oldUser)
+    end if
+    Machine.Object.User = Employee.Object.Number
+end sub
+
+function findMachineGroup(machine)
+    Dim filePath, content, lines, line, machineDep, machineRes
+    filePath = "\\192.168.0.13\Engdrawing\Inspection Logs\Scanning Files\machines\MachineGroups.txt"
+    content = file.read(filePath)
+    lines = Split(content, vbCrLf)
+    Dim machineNameArr
+    machineNameArr = Split(machine, " ")
+    if Ubound(machineNameArr) > 0 Then
+        machineDep = Trim(machineNameArr(0))
+        machineRes = Trim(machineNameArr(1))
+        for each line in lines
+            If InStr(line, machineDep & vbTab & machineRes & vbTab) <> 0 Then
+                Dim lineArr
+                lineArr = Split(line, vbTab)
+                if Ubound(lineArr) < 2 Or Trim(lineArr(2)) = "" Then
+                    findMachineGroup = "null"
+                else
+                    findMachineGroup = lineArr(2)
+                end if
+            exit function
+        end if
+        next
+    end if
+    findMachineGroup = "false"
+end function
+
+function getSignedInMachines()
+    Dim currentMachine, otherMachines, str, i
+    currentMachine = Employee.Object.CurrentMachine
+    otherMachines = Replace(Employee.Object.OtherMachines, "<Array>", "")
+    if currentMachine <> "null" Then
+        str = currentMachine & "|" & otherMachines
+    else
+        str = otherMachines
+    end if
+    getSignedInMachines = Split(str, "|")
+end function
+
+sub startShift(Machine, Employee)
+   if logInScanning() And logInToResource(Machine) Then
+      logMachineAsRunning(Employee)
+      logOut 3, 3
+   end if
+end sub
+
+function logMachineAsRunning(EmployeeCode)
+   if Trim(Screen.text(42, 12, 10)) = "0" Then
+      Input.text("10000")
+      Input.key("[enter]")
+      Input.key("[enter]")
+   end if
+   Input.text("10100")
+   Input.key("[enter]")
+   Input.text("20000")
+   Input.key("[enter]")
+   if screen.check(29, 11, "Tag #:") Then
+        Input.text(EmployeeCode)
+        Input.key("[enter]")
+   end if
+   if Screen.check(29, 12, "Press < F1 > to Proceed") = True Then
+        msgbox("Reporting Date not the same as today's date, consider signing out the machine")
+        Input.key("[pf1]")
+   end if
+end function
+
+sub saveMachine(JsonObj)
+    Dim machine, filePath, localFilePath
+    machine = JsonObj.Object.Machine
+    if machine <> "null" Then
+        filePath = "\\192.168.0.13\Engdrawing\Inspection Logs\Scanning Files\machines\Machines\" & machine & ".json"
+        localFilePath = File.buildPath("scanning files/machine/machine.json")
+        File.write filePath, JsonObj.stringify()
+        File.write localFilePath, JsonObj.stringify()
+    end if
+end sub
+
+sub logOnServer(number, action)
+    Dim timeStr
+    timeStr = FormatDateTime(Now, vbShortDate) & " " & FormatDateTime(Now, vbShortTime)
+    Dim result
+    result = number & "|" & action & "|" & timeStr & "|" & config.Object.DeviceName
+    File.addLine "\\192.168.0.13\Engdrawing\Inspection Logs\Scanning Files\employees\Employee Log\" & number & ".txt", result
+end sub
+
+sub setEmployeeOnServer(JsonObj)
+    Dim number, filePath
+    number = JsonObj.Object.Number
+    filePath = "\\192.168.0.13\Engdrawing\Inspection Logs\Scanning Files\employees\Employees\" & number & ".json"
+    File.write filePath, JsonObj.stringify()
+end sub
+
+function employeeExists(employee)
+    Dim filePath, fileContent, line, lines
+    filePath = "\\192.168.0.13\Engdrawing\Inspection Logs\Scanning Files\employees\EmployeeList.txt"
+    fileContent = File.read(filePath)
+    lines = Split(fileContent, vbCrLf)
+    For Each line In lines
+        If InStr(line, employee & vbTab) = 1 Then
+            Dim lineArr, i, result
+            lineArr = Split(line, vbTab)
+            For i = 0 To UBound(lineArr) - 1
+                If i = 1 Then
+                    result = lineArr(i)
+                ElseIf i < UBound(lineArr) Then
+                    result = result & " " & lineArr(i)
+                End If
+            Next
+            employeeExists = result
+            Exit function
+        End If
+    Next
+    employeeExists = "null"
+end function
+
+
+' for navigating menus
+
+    function logOut(numF7, numF3)
+        Dim i
+        For i = 1 To numF7
+            Input.key("[pf7]")
+        Next
+        For i = 1 To numF3
+            Input.key("[pf3]")
+        Next
+        if Screen.check(34, 3, "CMS Main Menu") = true Then
+            logOut = true
+        else
+            logOut = false
+        end if
+    end function
+
+    function logInScanning()
+        Dim logInScanningArr(5)
+        Set logInScanningArr(0) = Commands.create("CMS Main Menu", 34, 3, 3)
+        Set logInScanningArr(1) = Commands.create("Production Management Main Menu", 25, 3, 8)
+        Set logInScanningArr(2) = Commands.create("Maintain Current Production - Main Menu", 21, 3, 10)
+        Set logInScanningArr(3) = Commands.create("Production Shop Floor Reporting Menu", 23, 3, 4)
+        Set logInScanningArr(4) = Commands.create("Production - Production Reporting Devices", 22, 1, "[pf1]")
+        Set logInScanningArr(5) = Commands.create("Device", 19, 4, "[pf1]")
+        if Commands.execute(logInScanningArr, Screen) <> false Then
+            msgbox("Please start at the correct screen, the CMS Main Menu")
+            logInScanning = false
+        else
+            logInScanning = true
+        end if
+    end function
+
+    function logInToResource(Machine)
+        if Screen.check(22, 1, "Production - Resource Activity Management") Then
+            Input.key("[pf5]")
+            if Screen.check(34, 13, "Enter") Then
+                Input.text(Replace(Machine, " ", ""))
+                Input.key("[enter]")
+                Dim check
+                check = Split(Machine, " ")
+                if Screen.check(15, 3, Trim(check(0))) And Screen.check(15, 4, check(1)) Then
+                    logInToResource = true
+                end if
+            end if
+        end if
+    end function
+
+
+' default classes
+    Class textClass
+        public function removeIfNull(text)
+            if text = "null" Then
+                removeIfNull = ""
+            else
+                removeIfNull = text
+            end if
+        end function
+        public function displayNoneIfNull(text)
+            if text = "null" Then
+                displayNoneIfNull = "none"
+            else
+                displayNoneIfNull = text
+            end if
+        end function
+    end Class
+    Class ScreenClass
+
+        public function check(startRow, startCol, string)
+            if text(startRow, startCol, Len(string)) = string Then
+                check = true
+            else
+                check = false
+            end if
+        end function
+
+        public function text(startRow, startCol, length)
+            autECLSession.autECLOIA.WaitForInputReady
+            text = Mid(autECLSession.autECLPS.GetText(), (startCol - 1) * 80 + startRow, length)
+        end function
+
+    end Class
+
+    Class FileClass
+
+        public function buildPath(name)
+            dim textFilePath, fso, currentDirectory
+            Set fso = CreateObject("Scripting.FileSystemObject")
+            currentDirectory = fso.GetAbsolutePathName(".")
+            textFilePath = fso.BuildPath(currentDirectory, name)
+            buildPath = textFilePath
+        end function
+
+        public function write(filePath, string)
+            Dim objFSO, objFile
+            Set objFSO = CreateObject("Scripting.FileSystemObject")
+
+            Set objFile = objFSO.CreateTextFile(filePath, True)
+
+            objFile.Write(string)
+
+            objFile.Close
+
+            Set objFile = Nothing
+            Set objFSO = Nothing
+        end function
+
+        public function read(filePath)
+            Dim objFSO, objTextFile, strContents
+
+            On Error Resume Next
+
+            Set objFSO = CreateObject("Scripting.FileSystemObject")
+            Set objTextFile = objFSO.OpenTextFile(filePath, 1)
+
+            strContents = objTextFile.ReadAll
+
+            objTextFile.Close
+            Set objTextFile = Nothing
+            Set objFSO = Nothing
+
+            ' Check if an error occurred
+            If Err.Number <> 0 Then
+                read = ""
+            Else
+                read = strContents
+            End If
+
+            On Error GoTo 0
+        end function
+
+        public function addLine(filePath, newLine)
+            Dim fileContent
+            fileContent = read(filePath) 
+            fileContent = newLine & vbCrLf & fileContent
+            write filePath, fileContent
+        end function
+
+        public function delete(filePath)
+            On Error Resume Next
+            Dim fso
+            Set fso = CreateObject("Scripting.FileSystemObject")
+            fso.DeleteFile filePath
+            Set fso = Nothing
+            On Error GoTo 0
+        end function
+    End Class
+
+    Class JSONClass
+        Public Object
+        Public String
+        Private Values
+
+        Private Sub Class_Initialize()
+            Set Object = CreateObject("Scripting.Dictionary")
+            String = ""
+        End Sub
+
+        Public Sub Load(jsonStr)
+            Set Object = parse(jsonStr)
+            String = jsonStr
+        End Sub
+        
+        public function parse(strJson)
+            Dim html, window
+            Set html = CreateObject("htmlfile")
+            Set window = html.parentWindow
+            window.execScript "var json = " & strJson & "; var str = ''; var props = ''; for (var key in json) { props = props + key + '|'; var arr = json[key]; var str = ''; if(arr instanceof Array && arr.length > 0) { str = arr[0]; for (var i = 1; i < arr.length; i++) { str = str + '|' + arr[i]; } json[key] = '<Array>' + str; } }", "JScript"
+            Set parse = window.json
+            Values = Split(window.props, "|")
+        end function
+
+
+        public function stringify()
+            Dim json, valuesArr
+            set json = Object
+            valuesArr = Values
+            Dim strJson, key, value, valueType
+            strJson = "{" & vbCrLf
+            For Each key In valuesArr
+                if Trim(key) <> "" Then
+                    value = Eval("json." & key)
+                    valueType = VarType(value)
+                    strJson = strJson & vbTab & """" & key & """: "
+                    If valueType = vbString And Left(value, 7) = "<Array>" Then
+                        strJson = strJson & stringifyArr(value)
+                    Elseif valueType = vbString Then
+                        strJson = strJson & """" & value & """"
+                    Else
+                        strJson = strJson & value
+                    End If
+                    strJson = strJson & ","
+                    strJson = strJson & vbCrLf
+                end if
+            Next
+            strJson = Left(strJson, Len(strJson) - 3)
+            strJson = strJson & vbCrLf & "}"
+            stringify = strJson
+        end function
+        public function stringifyArr(strArr)
+            Dim arr, index, str, value, valueType
+            arr = Split(Replace(strArr, "<Array>", ""), "|")
+            str = "["
+            for index = 0 to UBound(arr) step 1
+                value = arr(index)
+                if Trim(value) <> "" Then
+                    valueType = VarType(value)
+                    if valueType = vbString Then
+                        str = str & """" & value & """"
+                    Else
+                        str = str & value
+                    End If
+                    if(index < UBound(arr)) Then
+                        str = str + ","
+                    end if    
+                end if
+            next
+            str = str + "]"
+            stringifyArr = str
+        end function
+    End Class
+
+    Class InputClass
+
+        public function chop(str, maxLength)
+        if Len(str) < maxLength Then
+            key("[fldext]")
+        end if
+        end function
+
+        public function text(string)
+        Dim strIndex
+        For strIndex = 1 To Len(string)
+            key Mid(string, strIndex, 1)
+        Next
+        end function
+
+        public function key(action)
+        autECLSession.autECLOIA.WaitForInputReady
+        autECLSession.autECLPS.SendKeys action
+        end function
+
+        public function setCursor(col, row)
+        autECLSession.autECLOIA.WaitForInputReady
+        Dim curcol, correctionCol
+        Dim currow, correctionRow
+        curcol = autECLSession.autECLPS.CursorPosCol
+        currow = autECLSession.autECLPS.CursorPosRow
+        correctionCol = col - curcol
+        correctionRow = row - currow
+        dim i
+        i = 0
+        if correctionCol > 0 Then
+                for i = 1 to correctionCol
+                    key("[right]")
+                next
+        else
+                for i = 1 to correctionCol * -1
+                    key("[left]")
+                next
+        end if
+
+        i = 0
+        if correctionRow > 0 Then
+                for i = 1 to correctionRow
+                    key("[down]")
+                    next
+                else
+                for i = 1 to correctionRow * -1
+                    key("[up]")
+                next
+        end if
+        end function
+
+    end Class
+
+    Class CommandClass
+        public function create(safeString, posX, posY, command)
+        Dim obj
+        Set obj = CreateObject("Scripting.Dictionary")
+        obj("keystroke") = command
+        obj("safeString") = safeString
+        obj("posX") = posX
+        obj("posY") = posY
+        Set create = obj
+        end function
+        
+        public function execute(commands, screen)
+        dim command
+        for each command in commands
+            if checkAndExecute(command, screen) = false Then
+                execute = false
+                exit for
+            end if
+        next
+        end function
+
+        public function checkAndExecute(command, screen)
+        if screen.check(command("posX"), command("posY"), command("safeString")) Then
+            autECLSession.autECLOIA.WaitForInputReady
+            autECLSession.autECLPS.SendKeys command("keystroke")
+            autECLSession.autECLOIA.WaitForInputReady
+            autECLSession.autECLPS.SendKeys "[enter]"
+            checkAndExecute = true
+        else
+            checkAndExecute = false
+        end if
+        end function
+    end Class
+
+

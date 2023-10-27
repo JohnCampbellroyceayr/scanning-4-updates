@@ -1,0 +1,411 @@
+[PCOMM SCRIPT HEADER]
+LANGUAGE=VBSCRIPT
+DESCRIPTION=
+[PCOMM SCRIPT SOURCE]
+OPTION EXPLICIT
+autECLSession.SetConnectionByName(ThisSessionName)
+
+'declare classes
+    Dim File
+    Set File = New FileClass
+    Dim Screen
+    Set Screen = New ScreenClass
+    Dim Input
+    Set Input = New InputClass
+    Dim Commands
+    Set Commands = New CommandClass
+    Dim Text
+    Set Text = New TextClass
+
+
+
+Dim deviceEmployee, Employee, config
+Set deviceEmployee = new JSONClass
+Set Employee = new JSONClass
+Set config = new JSONClass
+
+deviceEmployee.Load(File.read(File.buildPath("scanning files/employee/employee.json")))
+config.Load(File.read(File.buildPath("scanning files/config/config.json")))
+
+Employee.Load(getEmployeeServer(deviceEmployee.Object.Number))
+
+
+' msgbox(Employee.Object.Number)
+
+
+' MsgBox(Employee.stringify())
+' File.write File.buildPath("scanning files/employee/employee.json"), Employee.stringify()
+
+checkVersion()
+
+function getEmployeeServer(number)
+    Dim path, noEmployeePath, fileContent
+    path = "\\192.168.0.13\Engdrawing\Inspection Logs\Scanning Files\employees\Employees\" & number & ".json"
+    noEmployeePath = "\\192.168.0.13\Engdrawing\Inspection Logs\Scanning Files\employees\noEmployee.json"
+    fileContent = file.read(path)
+    if Trim(fileContent) <> "" Then
+        getEmployeeServer = fileContent
+    else
+        getEmployeeServer = file.read(noEmployeePath)
+    end if
+end function
+
+
+sub signIn()
+    Dim newEmployee
+    newEmployee = Trim(InputBox("Current Sign-in: " & Text.displayNoneIfNull(Employee.Object.Number) & " " & Text.removeIfNull(Employee.Object.Name), "Input your employee #", text.removeIfNull(Employee.Object.Number)))
+    if newEmployee = "" Then
+        exit sub
+    else
+        Dim employeeIsListed
+        employeeIsListed = employeeExists(newEmployee)
+        if employeeIsListed <> "null" Then
+            Employee.Load(getEmployeeServer(newEmployee))
+            If Employee.Object.Number = "null" Then
+                Employee.Object.Number = newEmployee
+                Employee.Object.Name = employeeIsListed
+                If Employee.Object.Status = "null" Then
+                    Employee.Object.Status = "Signed-In"
+                end if
+                setEmployeeOnServer(Employee)
+                logOnServer newEmployee, "Sign-in"
+            end if
+            msgbox(Employee.Object.Number & " " & Employee.Object.Name & " successfully signed in")
+            File.write File.buildPath("scanning files/employee/employee.json"), Employee.stringify()
+        else
+            MsgBox("Sorry, we could not find that employee code")
+        end if
+    end if
+end sub
+
+sub logOnServer(number, action)
+    Dim timeStr
+    timeStr = FormatDateTime(Now, vbShortDate) & " " & FormatDateTime(Now, vbShortTime)
+    Dim result
+    result = number & "|" & action & "|" & timeStr & "|" & config.Object.DeviceName
+    File.addLine "\\192.168.0.13\Engdrawing\Inspection Logs\Scanning Files\employees\Employee Log\" & number & ".txt", result
+end sub
+
+sub setEmployeeOnServer(JsonObj)
+    Dim number, filePath
+    number = JsonObj.Object.Number
+    filePath = "\\192.168.0.13\Engdrawing\Inspection Logs\Scanning Files\employees\Employees\" & number & ".json"
+    File.write filePath, JsonObj.stringify()
+end sub
+
+function employeeExists(employee)
+    Dim filePath, fileContent, line, lines
+    filePath = "\\192.168.0.13\Engdrawing\Inspection Logs\Scanning Files\employees\EmployeeList.txt"
+    fileContent = File.read(filePath)
+    lines = Split(fileContent, vbCrLf)
+    For Each line In lines
+        If InStr(line, employee & vbTab) = 1 Then
+            Dim lineArr, i, result
+            lineArr = Split(line, vbTab)
+            For i = 0 To UBound(lineArr) - 1
+                If i = 1 Then
+                    result = lineArr(i)
+                ElseIf i < UBound(lineArr) Then
+                    result = result & " " & lineArr(i)
+                End If
+            Next
+            employeeExists = result
+            Exit function
+        End If
+    Next
+    employeeExists = "null"
+end function
+
+' default classes
+    Class textClass
+        public function removeIfNull(text)
+            if text = "null" Then
+                removeIfNull = ""
+            else
+                removeIfNull = text
+            end if
+        end function
+        public function displayNoneIfNull(text)
+            if text = "null" Then
+                displayNoneIfNull = "none"
+            else
+                displayNoneIfNull = text
+            end if
+        end function
+    end Class
+    Class ScreenClass
+
+        public function check(startRow, startCol, string)
+            if text(startRow, startCol, Len(string)) = string Then
+                check = true
+            else
+                check = false
+            end if
+        end function
+
+        public function text(startRow, startCol, length)
+            autECLSession.autECLOIA.WaitForInputReady
+            text = Mid(autECLSession.autECLPS.GetText(), (startCol - 1) * 80 + startRow, length)
+        end function
+
+    end Class
+
+    Class FileClass
+
+        public function buildPath(name)
+            dim textFilePath, fso, currentDirectory
+            Set fso = CreateObject("Scripting.FileSystemObject")
+            currentDirectory = fso.GetAbsolutePathName(".")
+            textFilePath = fso.BuildPath(currentDirectory, name)
+            buildPath = textFilePath
+        end function
+
+        public function write(filePath, string)
+            Dim objFSO, objFile
+            Set objFSO = CreateObject("Scripting.FileSystemObject")
+
+            Set objFile = objFSO.CreateTextFile(filePath, True)
+
+            objFile.Write(string)
+
+            objFile.Close
+
+            Set objFile = Nothing
+            Set objFSO = Nothing
+        end function
+
+        public function read(filePath)
+            Dim objFSO, objTextFile, strContents
+
+            On Error Resume Next
+
+            Set objFSO = CreateObject("Scripting.FileSystemObject")
+            Set objTextFile = objFSO.OpenTextFile(filePath, 1)
+
+            strContents = objTextFile.ReadAll
+
+            objTextFile.Close
+            Set objTextFile = Nothing
+            Set objFSO = Nothing
+
+            ' Check if an error occurred
+            If Err.Number <> 0 Then
+                read = ""
+            Else
+                read = strContents
+            End If
+
+            On Error GoTo 0
+        end function
+        public function addLine(filePath, newLine)
+            Dim fileContent
+            fileContent = read(filePath) 
+            fileContent = newLine & vbCrLf & fileContent
+            write filePath, fileContent
+        end function
+    End Class
+
+    Class JSONClass
+        Public Object
+        Public String
+        Private Values
+
+        Private Sub Class_Initialize()
+            Set Object = CreateObject("Scripting.Dictionary")
+            String = ""
+        End Sub
+
+        Public Sub Load(jsonStr)
+            Set Object = parse(jsonStr)
+            String = jsonStr
+        End Sub
+        
+        public function parse(strJson)
+            Dim html, window
+            Set html = CreateObject("htmlfile")
+            Set window = html.parentWindow
+            window.execScript "var json = " & strJson & "; var str = ''; var props = ''; for (var key in json) { props = props + key + '|'; var arr = json[key]; var str = ''; if(arr instanceof Array && arr.length > 0) { str = arr[0]; for (var i = 1; i < arr.length; i++) { str = str + '|' + arr[i]; } json[key] = '<Array>' + str; } }", "JScript"
+            Set parse = window.json
+            Values = Split(window.props, "|")
+        end function
+
+
+        public function stringify()
+            Dim json, valuesArr
+            set json = Object
+            valuesArr = Values
+            Dim strJson, key, value, valueType
+            strJson = "{" & vbCrLf
+            For Each key In valuesArr
+                if Trim(key) <> "" Then
+                    value = Eval("json." & key)
+                    valueType = VarType(value)
+                    strJson = strJson & vbTab & """" & key & """: "
+                    If valueType = vbString And Left(value, 7) = "<Array>" Then
+                        strJson = strJson & stringifyArr(value)
+                    Elseif valueType = vbString Then
+                        strJson = strJson & """" & value & """"
+                    Else
+                        strJson = strJson & value
+                    End If
+                    strJson = strJson & ","
+                    strJson = strJson & vbCrLf
+                end if
+            Next
+            strJson = Left(strJson, Len(strJson) - 3)
+            strJson = strJson & vbCrLf & "}"
+            stringify = strJson
+        end function
+        public function stringifyArr(strArr)
+            Dim arr, index, str, value, valueType
+            arr = Split(Replace(strArr, "<Array>", ""), "|")
+            str = "["
+            for index = 0 to UBound(arr) step 1
+                value = arr(index)
+                if Trim(value) <> "" Then
+                    valueType = VarType(value)
+                    if valueType = vbString Then
+                        str = str & """" & value & """"
+                    Else
+                        str = str & value
+                    End If
+                    if(index < UBound(arr)) Then
+                        str = str + ","
+                    end if    
+                end if
+            next
+            str = str + "]"
+            stringifyArr = str
+        end function
+    End Class
+
+    Class InputClass
+
+        public function chop(str, maxLength)
+        if Len(str) < maxLength Then
+            key("[fldext]")
+        end if
+        end function
+
+        public function text(string)
+        Dim strIndex
+        For strIndex = 1 To Len(string)
+                key Mid(string, strIndex, 1)
+        Next
+        end function
+
+        public function key(action)
+        autECLSession.autECLOIA.WaitForInputReady
+        autECLSession.autECLPS.SendKeys action
+        end function
+
+        public function setCursor(col, row)
+        autECLSession.autECLOIA.WaitForInputReady
+        Dim curcol, correctionCol
+        Dim currow, correctionRow
+        curcol = autECLSession.autECLPS.CursorPosCol
+        currow = autECLSession.autECLPS.CursorPosRow
+        correctionCol = col - curcol
+        correctionRow = row - currow
+        dim i
+        i = 0
+        if correctionCol > 0 Then
+                for i = 1 to correctionCol
+                    key("[right]")
+                next
+        else
+                for i = 1 to correctionCol * -1
+                    key("[left]")
+                next
+        end if
+
+        i = 0
+        if correctionRow > 0 Then
+                for i = 1 to correctionRow
+                    key("[down]")
+                    next
+                else
+                for i = 1 to correctionRow * -1
+                    key("[up]")
+                next
+        end if
+        end function
+
+    end Class
+
+    Class CommandClass
+        public function create(safeString, posX, posY, command)
+        Dim obj
+        Set obj = CreateObject("Scripting.Dictionary")
+        obj("keystroke") = command
+        obj("safeString") = safeString
+        obj("posX") = posX
+        obj("posY") = posY
+        Set create = obj
+        end function
+        
+        public function execute(commands, screen)
+        dim command
+        for each command in commands
+            if checkAndExecute(command, screen) = false Then
+                execute = false
+                exit for
+            end if
+        next
+        end function
+
+        public function checkAndExecute(command, screen)
+        if screen.check(command("posX"), command("posY"), command("safeString")) Then
+            autECLSession.autECLOIA.WaitForInputReady
+            autECLSession.autECLPS.SendKeys command("keystroke")
+            autECLSession.autECLOIA.WaitForInputReady
+            autECLSession.autECLPS.SendKeys "[enter]"
+            checkAndExecute = true
+        else
+            checkAndExecute = false
+        end if
+        end function
+    end Class
+
+sub checkVersion()
+    Dim lastestVersionContent, latestVersion, version
+    Set version = new JSONClass
+    Set latestVersion = new JSONClass
+
+    lastestVersionContent = File.read("\\192.168.0.13\Engdrawing\Software\John Campbell\scanning 4.0.0\files\version.json")
+    if Trim(lastestVersionContent) <> "" Then
+        latestVersion.Load(lastestVersionContent)
+        version.Load(File.read(File.buildPath("version.json")))
+        if version.Object.version <> latestVersion.Object.version Then
+            Dim Message
+            Message = "Need to upgrade, the current version is not the lastest version" & vbCrLf
+            Message = Message & "Current version: " & version.Object.version & " -->" & vbCrLf
+            Message = Message & "New version: " & latestVersion.Object.version & vbCrLf
+            msgbox(Message)
+            copyFilesUpgradeToNewVersion
+            msgbox("now on the lastest version, please press the sign-in button again.")
+            exit sub
+        else
+            signIn
+        end if
+    else
+        MsgBox("Unable to connect to server, application is unable to run")
+    end if
+
+end sub
+
+sub copyFilesUpgradeToNewVersion()
+    Dim sourceFolder, destFolder
+    sourceFolder = "\\192.168.0.13\Engdrawing\Software\John Campbell\scanning 4.0.0\files\"
+    destFolder = File.buildPath("")
+    Dim fileCopy, fso
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    For Each fileCopy In fso.GetFolder(sourceFolder).Files
+        fso.CopyFile fileCopy.Path, fso.BuildPath(destFolder, fileCopy.Name)
+    Next
+
+    Dim folder
+    For Each folder In fso.GetFolder(sourceFolder).SubFolders
+        fso.CopyFolder folder.Path, fso.BuildPath(destFolder, folder.Name), True
+    Next
+end sub
