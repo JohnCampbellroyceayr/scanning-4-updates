@@ -19,7 +19,7 @@ autECLSession.SetConnectionByName(ThisSessionName)
 
 
 
-Dim deviceEmployee, Employee, deviceMachine, Machine, config
+Dim deviceEmployee, Employee, deviceMachine, Machine, displayJobsMessage, config
 
 Set deviceEmployee = new JSONClass
 Set Employee = new JSONClass
@@ -37,17 +37,21 @@ config.Load(File.read(File.buildPath("scanning files/config/config.json")))
 Employee.Load(getEmployeeServer(deviceEmployee.Object.Number))
 Machine.Load(getMachineServer(deviceEmployee.Object.CurrentMachine))
 
-begin()
+addToMessage "", "" ' updates the current message (all the work orders
 
-sub begin()
+Dim startedOnSignin
 
-    if Employee.Object.Number <> "null" And Machine.Object.Machine <> "null" Then
-    
-    else 
-        msgbox("You must sign-in and select a machine")
-        exit sub
+setup()
+if startedOnSignin = True Then
+    if Screen.check(34, 3, "CMS Main Menu") Then
+        Input.setCursor 7, 20
+        Input.text("90")
+        Input.key("[enter]")
     end if
+end if
 
+
+function begin()
     autECLSession.autECLOIA.WaitForAppAvailable
     autECLSession.autECLOIA.WaitForInputReady
     if Screen.check(36, 1, "Sign On") Then
@@ -66,8 +70,8 @@ sub begin()
                     Input.text("90")
                     Input.key("[enter]")
                     Input.key("[enter]")
-                    login()
-                    exit sub
+                    begin = begin()
+                    exit function
                 end if
                 if Screen.check(36, 1, "Sign On") <> true Then
                     Input.key("[pf12]")
@@ -75,19 +79,14 @@ sub begin()
             end if
         else
             MsgBox("Incorrect Password or Unable to connect to server")
-            exit sub
+            exit function
         end if
     else
-        prepareRun(false)
-        exit sub
+        begin = prepareRun(false)
+        exit function
     end if
-    prepareRun(true)
-    if Screen.check(34, 3, "CMS Main Menu") Then
-        Input.setCursor 7, 20
-        Input.text("90")
-        Input.key("[enter]")
-    end if
-end sub
+    begin = prepareRun(true)
+end function
 function getPassword(user) 
     Dim fileContents, lines, line
     fileContents = File.read("\\192.168.0.13\Engdrawing\Inspection Logs\Scanning Files\AS400 creds\logins.txt")
@@ -130,14 +129,15 @@ function getMachineServer(machine)
     end if
 end function
 
-sub prepareRun(startFromSignin)
+function prepareRun(startFromSignin)
+    startedOnSignin = startFromSignin
     if Screen.check(34, 3, "CMS Main Menu") or startFromSignin = true Then
         Input.setCursor 7, 20
-        setup()
+        prepareRun = true
     else
         MsgBox("Please start on the CMS Main Menu or Sign in menu")
     end if
-end sub
+end function
 
 sub setup()
     if Employee.Object.Number <> "null" And Machine.Object.Machine <> "null" Then
@@ -146,28 +146,50 @@ sub setup()
         Message = "Current sign-in: " & Text.displayNoneIfNull(Employee.Object.Number) & " " & Text.removeIfNull(Employee.Object.Name) & vbCrLf
         Message = Message & "Current Machine: " & Text.displayNoneIfNull(machineName) & vbCrLf
         Message = Message & "Current Status: " & Text.displayNoneIfNull(Machine.Object.Status) & vbCrLf 
-        Message = Message & "Current Jobs: " & vbCrLf 
-        Message = Message & displayWO(Machine.Object.Jobs, Machine.Object.Sequences)
+        Message = Message & "Jobs already setup: " & vbCrLf 
+        Message = Message & displayWO() & vbCrLf & vbCrLf
         Dim order, seq
-        order = Trim(InputBox(Message, "Setup Job(s)", "Scan W/O # to add"))
+        order = Trim(InputBox(Message & "To add an order, type/scan the order and press enter. To scan all jobs as setup, press 'OK' ", "Setup Job(s)", "Scan W/O # to add"))
         If order <> "" Then
             if InStr(order, "Scan W/O # to add") <> 0 Then
                 if Machine.Object.Jobs <> "<Array>null" Then
                     Dim finalWarning
-                    finalWarning = msgbox("Do you want to setup the following?" & vbCrLf & displayWO(Machine.Object.Jobs, Machine.Object.Sequences), vbYesNo)
+                    finalWarning = msgbox("Do you want to setup the following Job(s)?" & vbCrLf & displayWO(), vbYesNo)
                     If finalWarning = vbYes Then
+                        if Screen.check(34, 3, "CMS Main Menu") <> true Then
+                            if begin() <> true Then
+                                msgbox("On the incorrect screen, please try again")
+                                exit sub
+                            end if
+                        end if
+
                         setupAllOrders()
+                        Machine.Object.Status = "Setup"
                         saveMachine(Machine)
                     end if
                 end if
                 exit sub
             end if
-            seq = GetNumeric(RemoveLeadingZeros(Trim(InputBox(Message, "Setup Job(s)", "Scan Seq # to add"))))
+            seq = GetNumeric(RemoveLeadingZeros(Trim(InputBox(Message & "To add a sequence to the order you just entered, enter the number and press enter.", "Setup Job(s)", "Scan Seq # to add"))))
             ' If seq <> "" Then
+                if Screen.check(34, 3, "CMS Main Menu") <> true Then
+                    if begin() <> true Then
+                        msgbox("On the incorrect screen, please try again")
+                        exit sub
+                    end if
+                end if
+
+                if checkIfOrderNumberAlreadyEntered(order) = true Then
+                    msgbox("You cannot add the same job twice")
+                    setup()
+                    exit sub
+                end if
+                
                 Dim result
                 result = Split(checkWorkOrder(order, seq), "|")
                 if result(0) <> "false" Then
                     addToMachine order, seq, result(0), result(1), result(2), result(3)
+                    addToMessage order, seq
                 else
                     MsgBox("Seq '" & seq & "' On Order '" & order & "' for machine '" & machineName & "' Not found")
                 end if
@@ -213,6 +235,17 @@ sub setupAllOrders()
    end if
 end sub
 
+function checkIfOrderNumberAlreadyEntered(newOrder)
+    Dim Jobs, job
+    Jobs = Split(Replace(Machine.Object.Jobs, "<Array>", ""), "|")
+    for each job in Jobs
+        if job = newOrder Then
+            checkIfOrderNumberAlreadyEntered = true
+            exit function
+        end if
+    next
+    checkIfOrderNumberAlreadyEntered = false
+end function
 
 function scanAsSetup(MachineValues, Employee)
    Dim jobsArray, seqArray, statusArray, reportArray, statusString
@@ -354,17 +387,26 @@ function addToArray(strArr, newValue)
     addToArray = "<Array>" & str
 end function
 
-
-function displayWO(orders, seq) 
+function addToMessage(order, seq)
     Dim ordersArr, seqArr, i, str
-    ordersArr = Split(Replace(orders, "<Array>", ""), "|")
-    seqArr = Split(Replace(seq, "<Array>", ""), "|")
-    for i = 0 to UBound(ordersArr) step 1
-        if ordersArr(i) <> "null" Then
-            str = str & ordersArr(i) & vbTab & seqArr(i) & vbCrLf
-        end if
-    next
-    displayWO = str
+    if order = "" Then
+        ordersArr = Split(Replace(Machine.Object.Jobs, "<Array>", ""), "|")
+        seqArr = Split(Replace(Machine.Object.Sequences, "<Array>", ""), "|")
+        for i = 0 to UBound(ordersArr) step 1
+            if ordersArr(i) <> "null" Then
+                str = str & "W/O: " & ordersArr(i) & " SEQ: " & seqArr(i) & vbCrLf
+            end if
+        next
+        str = str & "New Job(s):" & vbCrLf
+        displayJobsMessage = str
+    else
+        displayJobsMessage = displayJobsMessage & "W/O: " & order & " SEQ: " & seq & vbCrLf
+    end if
+end function
+
+
+function displayWO() 
+    displayWO = displayJobsMessage
 end function
 
 sub setMachineAsCurrentMachine(machineName)
