@@ -73,9 +73,10 @@ function begin()
                     begin = begin()
                     exit function
                 end if
-                if Screen.check(36, 1, "Sign On") <> true Then
-                    Input.key("[pf12]")
-                end if
+                autECLSession.autECLOIA.WaitForAppAvailable
+                autECLSession.autECLOIA.WaitForInputReady
+                Input.key("[enter]")
+                autECLSession.autECLOIA.WaitForAppAvailable
             end if
         else
             MsgBox("Incorrect Password or Unable to connect to server")
@@ -178,7 +179,7 @@ sub setup()
                         exit sub
                     end if
                 end if
-
+                Input.setCursor 7, 20
                 if checkIfOrderNumberAlreadyEntered(order) = true Then
                     msgbox("You cannot add the same job twice")
                     setup()
@@ -220,6 +221,7 @@ End Function
 
 sub setupAllOrders()
    Dim newJobStatus
+   Input.setCursor 7, 20
    if atLeastOneReportingSeqIsY(Split(Replace(Machine.Object.ReportingSequence, "<Array>", ""), "|")) Then
       if logInScanning() And logInToResource(Machine.Object.Machine) Then
          logMachineAsRunningForSetup(Employee.Object.Number)
