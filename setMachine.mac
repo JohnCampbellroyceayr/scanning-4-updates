@@ -41,7 +41,7 @@ Machine.Load(getMachineServer(deviceEmployee.Object.CurrentMachine))
 begin
 
 sub begin()
-    Dim result, machineGroup
+    Dim result, machineGroup, defaultSeq
     if Employee.Object.Number <> "null" Then
         Dim Message, machineName
         machineName = Machine.Object.Machine
@@ -51,6 +51,7 @@ sub begin()
         If result <> "" Then
             Dim EmployeeStr
             machineGroup = findMachineGroup(result)
+            defaultSeq = findMachineDefaultSeq(result)
             if machineGroup = "false" Then
                 MsgBox("Could Not Find Machine " & result)
                 exit sub
@@ -95,10 +96,10 @@ sub begin()
             exit sub
         end if
     else
-        prepareRun false, result, machineGroup
+        prepareRun false, result, machineGroup, defaultSeq
         exit sub
     end if
-    prepareRun true, result, machineGroup
+    prepareRun true, result, machineGroup, defaultSeq
     if Screen.check(34, 3, "CMS Main Menu") Then
         Input.setCursor 7, 20
         Input.text("90")
@@ -147,10 +148,10 @@ function getMachineServer(machine)
     end if
 end function
 
-sub prepareRun(startFromSignin, result, machineGroup)
+sub prepareRun(startFromSignin, result, machineGroup, defaultSeq)
     if Screen.check(34, 3, "CMS Main Menu") or startFromSignin = true Then
         Input.setCursor 7, 20
-        setMachine  result, machineGroup
+        setMachine  result, machineGroup, defaultSeq
     else
         MsgBox("Please start on the CMS Main Menu or Sign in menu")
     end if
@@ -159,7 +160,7 @@ function findName(number)
     findName = "false"
 end function
 
-sub setMachine(result, machineGroup)
+sub setMachine(result, machineGroup, defaultSeq)
     Dim newMachine
     Set newMachine = new JSONClass
     newMachine.Load(getMachineServer(result))
@@ -167,6 +168,7 @@ sub setMachine(result, machineGroup)
     if newMachine.Object.Machine = "null" Then
         Machine.Object.Machine = result
         Machine.Object.MachineGroup = machineGroup
+        Machine.Object.DefaultSequence = defaultSeq
         Machine.Object.Status = "Idle"
     end if
     Input.setCursor 7, 20
@@ -174,8 +176,12 @@ sub setMachine(result, machineGroup)
     setMachineAsCurrentMachine(result)
     File.write File.buildPath("scanning files/employee/employee.json"), Employee.stringify()
     setEmployeeOnServer(Employee)
-    saveMachine(Machine)
+    Dim message
     startShift Machine.Object.Machine, Employee.Object.Number
+    saveMachine(Machine)
+    message = "Machine " & Machine.Object.Machine
+    message = message & " (" & text.removeIfNull(Machine.Object.Description) & ") was successfully set."  
+    msgbox(message)
 end sub
 
 sub setMachineAsCurrentMachine(machineName)
@@ -246,6 +252,33 @@ function findMachineGroup(machine)
     findMachineGroup = "false"
 end function
 
+function findMachineDefaultSeq(machine)
+    Dim filePath, content, lines, line, machineDep, machineRes
+    filePath = "\\192.168.0.13\Engdrawing\Inspection Logs\Scanning Files\machines\MachineGroups.txt"
+    content = file.read(filePath)
+    lines = Split(content, vbCrLf)
+    Dim machineNameArr
+    machineNameArr = Split(machine, " ")
+    if Ubound(machineNameArr) > 0 Then
+        machineDep = Trim(machineNameArr(0))
+        machineRes = Trim(machineNameArr(1))
+        for each line in lines
+            If InStr(line, machineDep & vbTab & machineRes & vbTab) <> 0 Then
+                Dim lineArr
+                lineArr = Split(line, vbTab)
+                if Ubound(lineArr) < 3 Or Trim(lineArr(3)) = "" Then
+                    findMachineDefaultSeq = "null"
+                else
+                    findMachineDefaultSeq = lineArr(3)
+                end if
+            exit function
+        end if
+        next
+    end if
+    findMachineDefaultSeq = "false"
+end function
+
+
 function getSignedInMachines()
     Dim currentMachine, otherMachines, str, i
     currentMachine = Employee.Object.CurrentMachine
@@ -258,10 +291,14 @@ function getSignedInMachines()
     getSignedInMachines = Split(str, "|")
 end function
 
-sub startShift(Machine, Employee)
-   if logInScanning() And logInToResource(Machine) Then
-      logMachineAsRunning(Employee)
-      logOut 3, 3
+sub startShift(machinename, Employee)
+   if logInScanning() And logInToResource(machinename) Then
+        Dim description
+        description = logMachineAsRunning(Employee)
+        if Trim(description) <> "" Then
+            Machine.Object.Description = Trim(description)
+        end if
+        logOut 3, 3
    end if
 end sub
 
@@ -283,6 +320,7 @@ function logMachineAsRunning(EmployeeCode)
         msgbox("Reporting Date not the same as today's date, consider signing out the machine")
         Input.key("[pf1]")
    end if
+   logMachineAsRunning = Screen.text(21, 4, 35)
 end function
 
 sub saveMachine(JsonObj)
