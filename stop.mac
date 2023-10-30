@@ -62,7 +62,6 @@ function getMachineServer(machine)
     end if
 end function
 
-
 removeJobs
 sub removeJobs()
     if Employee.Object.Number <> "null" And Machine.Object.Machine <> "null" And Machine.Object.Jobs <> "<Array>null" Then
@@ -79,13 +78,19 @@ sub removeJobs()
             Dim index, jobs 
             On Error Resume Next
             index = CInt(result)
+            Dim removedJobsString
+            removedJobsString = "W/O: " & Machine.getArray("Jobs")(index - 1) & " "
+            removedJobsString = removedJobsString & "SEQ: " & Machine.getArray("Sequences")(index - 1)
             If Err.Number <> 0 Then
                 MsgBox("Please enter only numbers and an acceptable number")
+                removeJobs()
+                exit sub
             else
             end if
             On Error GoTo 0
             removeFromMachine(index - 1)
             saveMachine(Machine)
+            msgbox("The following job has been removed successfully:" & vbCrLf & removedJobsString)
             removeJobs()
         Else
             exit sub
@@ -96,7 +101,6 @@ sub removeJobs()
 end sub
 
 sub removeFromMachine(index)
-    ' msgbox(RemoveElementFromArray(Machine.getArray("Jobs")), index)
     Machine.Object.Jobs = RemoveElementFromArray(Machine.getArray("Jobs"), index)
     Machine.Object.Sequences = RemoveElementFromArray(Machine.getArray("Sequences"), index)
     Machine.Object.PartNumbers = RemoveElementFromArray(Machine.getArray("PartNumbers"), index)
@@ -110,7 +114,7 @@ Function RemoveElementFromArray(arr, index)
   str = "<Array>null"
   For i = 0 To UBound(arr)
     If i <> index Then
-        str = str & "|" & arr(index)
+        str = str & "|" & arr(i)
     End If
   Next
   str = Replace(str, "<Array>null|", "<Array>")
