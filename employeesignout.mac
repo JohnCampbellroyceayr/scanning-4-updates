@@ -70,9 +70,9 @@ sub begin()
                     login()
                     exit sub
                 end if
-                if Screen.check(36, 1, "Sign On") <> true Then
-                    Input.key("[pf12]")
-                end if
+                autECLSession.autECLOIA.WaitForAppAvailable
+                Input.key("[enter]")
+                autECLSession.autECLOIA.WaitForAppAvailable
             end if
         else
             MsgBox("Incorrect Password or Unable to connect to server")
@@ -191,6 +191,7 @@ function removeEmployeeFromMachine(usersStr, employeeCode)
 end function
 
 function signOutMachines(machineArr)
+        Input.setCursor 7, 20
     Dim i
     if Ubound(machineArr) <> 0 or Trim(machineArr(0)) <> "null" Then
         if logInScanning() Then
