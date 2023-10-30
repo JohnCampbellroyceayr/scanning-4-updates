@@ -33,12 +33,16 @@ begin
 sub begin()
 
     if Employee.Object.Number <> "null" Then
+        Dim signOutMessage
+        signOutMessage = Employee.Object.Number & " " & Employee.Object.Name
+        signOutMessage = signOutMessage & " was successfully signed out."
         Dim result
         result = msgbox("Do you really want to" & vbCrLf & "sign-out: " & Text.displayNoneIfNull(Employee.Object.Number) & " " & Text.removeIfNull(Employee.Object.Name) & vbCrLf & "(this will automatically sign you out " & vbCrLf & "of all your jobs)", vbYesNo, "Sign-Out Confirmation")
         If result = vbYes Then
             If Employee.Object.CurrentMachine = "null" Then
                 logOnServer Employee.Object.Number, "Sign-Out"
                 clearCurrentEmployee()
+                msgbox(signOutMessage)
                 exit sub
             end if
         Else
@@ -156,10 +160,14 @@ sub prepareRun(startFromSignin)
 end sub
 
 sub signOut()
+    Dim signOutMessage
+    signOutMessage = Employee.Object.Number & " " & Employee.Object.Name
+    signOutMessage = signOutMessage & " was successfully signed out."
     logOnServer Employee.Object.Number, "Sign-Out"
     signOutMachines(getSignedInMachines())
     logOut 3, 4
     clearCurrentEmployee()
+    msgbox(signOutMessage)
 end sub
 
 function getSignedInMachines()
@@ -191,7 +199,7 @@ function removeEmployeeFromMachine(usersStr, employeeCode)
 end function
 
 function signOutMachines(machineArr)
-        Input.setCursor 7, 20
+    Input.setCursor 7, 20
     Dim i
     if Ubound(machineArr) <> 0 or Trim(machineArr(0)) <> "null" Then
         if logInScanning() Then
