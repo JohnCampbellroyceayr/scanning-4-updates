@@ -155,7 +155,7 @@ sub setup()
             if InStr(order, "Scan W/O # to add") <> 0 Then
                 if Machine.Object.Jobs <> "<Array>null" Then
                     Dim finalWarning
-                    finalWarning = msgbox("Do you want to setup the following Job(s)?" & vbCrLf & displayWO(), vbYesNo)
+                    finalWarning = msgbox("Do you want to setup the following Job(s)?" & vbCrLf & getWorkOrderMessage(), vbYesNo)
                     If finalWarning = vbYes Then
                         if Screen.check(34, 3, "CMS Main Menu") <> true Then
                             if begin() <> true Then
@@ -167,11 +167,12 @@ sub setup()
                         setupAllOrders()
                         Machine.Object.Status = "Setup"
                         saveMachine(Machine)
+                        MsgBox("The Following Job(s) were successfully set to SETUP mode." & vbCrLf & getWorkOrderMessage())
                     end if
                 end if
                 exit sub
             end if
-            seq = GetNumeric(RemoveLeadingZeros(Trim(InputBox(Message & "To add a sequence to the order you just entered, enter the number and press enter.", "Setup Job(s)", "Scan Seq # to add"))))
+            seq = GetNumeric(RemoveLeadingZeros(Trim(InputBox(Message & "To add a sequence to the order you just entered, enter the number and press enter.", "Setup Job(s)", text.removeIfNull(Machine.Object.DefaultSequence)))))
             ' If seq <> "" Then
                 if Screen.check(34, 3, "CMS Main Menu") <> true Then
                     if begin() <> true Then
@@ -406,6 +407,17 @@ function addToMessage(order, seq)
     end if
 end function
 
+function getWorkOrderMessage()
+    Dim ordersArr, seqArr, i, str
+    ordersArr = Split(Replace(Machine.Object.Jobs, "<Array>", ""), "|")
+    seqArr = Split(Replace(Machine.Object.Sequences, "<Array>", ""), "|")
+    for i = 0 to UBound(ordersArr) step 1
+        if ordersArr(i) <> "null" Then
+            str = str & "W/O: " & ordersArr(i) & " SEQ: " & seqArr(i) & vbCrLf
+        end if
+    next
+    getWorkOrderMessage = str
+end function
 
 function displayWO() 
     displayWO = displayJobsMessage
