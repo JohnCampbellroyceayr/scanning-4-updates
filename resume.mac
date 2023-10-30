@@ -160,8 +160,11 @@ sub resumeMachine()
                 Machine.Object.Status = Replace(Machine.Object.Status, "-Paused", "")
                 resumeMachineProd()
                 saveMachine(Machine)
+                logOut 3, 3
+                MsgBox("The Following Job(s) were RESUMED successfully. " & vbCrLf & getWorkOrderMessage())
+            else
+                logOut 3, 3
             end if
-            logOut 3, 3
         Else
             exit sub
         End If
@@ -169,6 +172,18 @@ sub resumeMachine()
         msgbox("You must sign-in and select a machine")
     end if
 end sub
+
+function getWorkOrderMessage()
+    Dim ordersArr, seqArr, i, str
+    ordersArr = Split(Replace(Machine.Object.Jobs, "<Array>", ""), "|")
+    seqArr = Split(Replace(Machine.Object.Sequences, "<Array>", ""), "|")
+    for i = 0 to UBound(ordersArr) step 1
+        if ordersArr(i) <> "null" Then
+            str = str & "W/O: " & ordersArr(i) & " SEQ: " & seqArr(i) & vbCrLf
+        end if
+    next
+    getWorkOrderMessage = str
+end function
 
 
 function resumeMachineProd()
