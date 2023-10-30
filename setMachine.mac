@@ -163,13 +163,13 @@ sub setMachine(result, machineGroup)
     Dim newMachine
     Set newMachine = new JSONClass
     newMachine.Load(getMachineServer(result))
+    Set Machine = newMachine
     if newMachine.Object.Machine = "null" Then
         Machine.Object.Machine = result
         Machine.Object.MachineGroup = machineGroup
         Machine.Object.Status = "Idle"
-    else
-        Set Machine = newMachine
     end if
+    Input.setCursor 7, 20
     setEmployeeAsCurrentUser()
     setMachineAsCurrentMachine(result)
     File.write File.buildPath("scanning files/employee/employee.json"), Employee.stringify()
