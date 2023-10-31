@@ -148,7 +148,7 @@ sub reportGood()
         Message = "Current sign-in: " & Text.displayNoneIfNull(Employee.Object.Number) & " " & Text.removeIfNull(Employee.Object.Name) & vbCrLf
         Message = Message & "Current Machine: " & Text.displayNoneIfNull(machineName) & vbCrLf
         Message = Message & "Current Status: " & Text.displayNoneIfNull(Machine.Object.Status) & vbCrLf 
-        Message = Message & "Press the index of the job you want to remove." & vbCrLf
+        Message = Message & "Enter the Index Number for the job you need to report good pieces." & vbCrLf
         Message = Message & displayOrdersGoodPieces() & vbCrLf
         result = InputBox(Message, "Good Pieces")
         If Trim(result) <> "" Then
@@ -167,8 +167,13 @@ sub reportGood()
             else
             end if
             On Error GoTo 0
-            Dim numPieces, numberOfPieces
-            numPieces = InputBox("Enter the number of good pieces on " & job, "Number of good pieces", CStr(getRemainingPieces(index - 1)))
+            Dim numPieces, numberOfPieces, message2, remaining
+            remaining = CStr(getRemainingPieces(index - 1))
+            message2 = "Enter the number of good pieces on " & job & vbCrLf
+            message2 = message2 & "Total required: " & Machine.getArray("PiecesNeeded")(index - 1) & vbCrLf
+            message2 = message2 & "Already Reported: " & Machine.getArray("GoodPieces")(index - 1) & vbCrLf
+            message2 = message2 & "Still Needed: " & remaining & vbCrLf
+            numPieces = InputBox(message2, "Number of good pieces", remaining)
             On Error Resume Next
             numberOfPieces = CInt(numPieces)
             If Err.Number <> 0 Or numberOfPieces < 1 Or InStr(numPieces, ".") Then
