@@ -215,6 +215,7 @@ end function
 sub removeMachineFromUser(index)
     if index = 0 Then
         deleteMachineServer(Employee.Object.CurrentMachine)
+        signOutMachine(Employee.Object.CurrentMachine)
         if Employee.Object.OtherMachines <> "<Array>null" Then
             Dim machineArr, i, machineCheck
             machineArr = Employee.getArray("OtherMachines")
@@ -235,7 +236,6 @@ sub removeMachineFromUser(index)
         else
             Employee.Object.CurrentMachine = "null"
         end if
-        signOutMachine(Employee.Object.CurrentMachine)
     else
         if Employee.Object.OtherMachines <> "<Array>null" Then
             signOutMachine(Employee.getArray("OtherMachines")(index - 1))
