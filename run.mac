@@ -88,7 +88,7 @@ function begin()
     end if
     begin = prepareRun(true)
 end function
-function getPassword(user) 
+function getPassword(user)
     Dim fileContents, lines, line
     fileContents = File.read("\\192.168.0.13\Engdrawing\Inspection Logs\Scanning Files\AS400 creds\logins.txt")
     if Trim(fileContents) <> "" Then
@@ -380,7 +380,7 @@ sub addToMachine(job, seq, report, partNumber, piecesNeeded, piecesCompleted)
     Machine.Object.Sequences = addToArray(Machine.Object.Sequences, seq)
     Machine.Object.PartNumbers = addToArray(Machine.Object.PartNumbers, partNumber)
     Machine.Object.GoodPieces = addToArray(Machine.Object.GoodPieces, piecesCompleted)
-    Machine.Object.PiecesNeeded = addToArray(Machine.Object.PiecesNeeded, piecesCompleted)
+    Machine.Object.PiecesNeeded = addToArray(Machine.Object.PiecesNeeded, piecesNeeded)
     Machine.Object.ReportingSequence = addToArray(Machine.Object.ReportingSequence, report)
 end sub
 
