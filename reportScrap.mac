@@ -148,9 +148,9 @@ sub reportScrap()
         Message = "Current sign-in: " & Text.displayNoneIfNull(Employee.Object.Number) & " " & Text.removeIfNull(Employee.Object.Name) & vbCrLf
         Message = Message & "Current Machine: " & Text.displayNoneIfNull(machineName) & vbCrLf
         Message = Message & "Current Status: " & Text.displayNoneIfNull(Machine.Object.Status) & vbCrLf 
-        Message = Message & "Press the index of the job you want to remove." & vbCrLf
+        Message = Message & "Enter the Index Number for the job you need to report scrap pieces." & vbCrLf
         Message = Message & displayOrdersScrapPieces() & vbCrLf
-        result = InputBox(Message, "Good Pieces")
+        result = InputBox(Message, "Scrap Pieces")
         If Trim(result) <> "" Then
             Dim index, jobs 
             On Error Resume Next
