@@ -40,20 +40,38 @@ Machine.Load(getMachineServer(deviceEmployee.Object.CurrentMachine))
 
 begin
 
+function postRequest(url, sendStr)
+    Dim request
+    Set request = CreateObject("MSXML2.XMLHTTP")
+    request.Open "POST", url, False
+    request.setRequestHeader "Content-Type", "application/json"
+    request.send sendStr
+    postRequest = request.responseText
+end function
+
 sub begin()
-    Dim result, machineGroup, defaultSeq
+    Dim result, machineGroup, machineDecscription, multiJob
     if Employee.Object.Number <> "null" Then
         Dim Message, machineName
         machineName = Machine.Object.Machine
         Message = "Current sign-in: " & Text.displayNoneIfNull(Employee.Object.Number) & " " & Text.removeIfNull(Employee.Object.Name) & vbCrLf
-        Message = Message & "Current Machine: " & Text.displayNoneIfNull(machineName)
-        result = Trim(InputBox(Message, "Please Enter Machine code", Text.removeIfNull(machineName)))
+        Message = Message & "Current Resource: " & Text.displayNoneIfNull(machineName)
+        result = Trim(InputBox(Message, "Please Enter Resource code", Text.removeIfNull(machineName)))
         If result <> "" Then
             Dim EmployeeStr
-            machineGroup = findMachineGroup(result)
-            defaultSeq = findMachineDefaultSeq(result)
+            Dim dep, res, returnStr, machineValuesArr
+
+            dep = "DFT" + Split(result, " ")(0)
+            res = Split(result, " ")(1)
+
+            returnStr = postRequest("http://192.168.0.19:2003/getMachine", "{""dep"": """ & dep & """, ""machine"": """ & res & """ }")
+            machineValuesArr = Split(returnStr, "|")
+            machineGroup = machineValuesArr(0)
+            machineDecscription = machineValuesArr(1)
+            multiJob = machineValuesArr(2)
+            
             if machineGroup = "false" Then
-                MsgBox("Could Not Find Machine " & result)
+                MsgBox("Could Not Find Resource " & result)
                 exit sub
             else
                 
@@ -62,7 +80,7 @@ sub begin()
             exit sub
         End If
     else
-        msgbox("No Employee Signed in, Please sign in before selecting a machine")
+        msgbox("No Employee Signed in, Please sign in before selecting a Resource")
         exit sub
     end if
 
@@ -70,10 +88,11 @@ sub begin()
     autECLSession.autECLOIA.WaitForInputReady
     if Screen.check(36, 1, "Sign On") Then
         Input.setCursor 53, 6
-        Dim user, password
-        user = config.Object.UserName
-        password = getPassword(user)
-        if Len(user) < 10 And password <> "" Then
+        Dim loginArr, user, password
+        loginArr = Split(postRequest("http://192.168.0.19:2003/login", "{""id"": """ & Employee.Object.Number & """}"), "|")
+        user = loginArr(0)
+        password = loginArr(1)
+        if Len(user) < 10 And user <> "null" And password <> "" And password <> "null" Then
             if Trim(user) <> "" Then
                 Input.text(user)
                 Input.key("[fldext]")
@@ -92,14 +111,14 @@ sub begin()
                 end if
             end if
         else
-            MsgBox("Incorrect Password or Unable to connect to server")
+            MsgBox("Incorrect or Unset Password or Unable to connect to server")
             exit sub
         end if
     else
-        prepareRun false, result, machineGroup, defaultSeq
+        prepareRun false, result, machineGroup, machineDecscription, multiJob
         exit sub
     end if
-    prepareRun true, result, machineGroup, defaultSeq
+    prepareRun true, result, machineGroup, machineDecscription, multiJob
     if Screen.check(34, 3, "CMS Main Menu") Then
         Input.setCursor 7, 20
         Input.text("90")
@@ -148,10 +167,10 @@ function getMachineServer(machine)
     end if
 end function
 
-sub prepareRun(startFromSignin, result, machineGroup, defaultSeq)
+sub prepareRun(startFromSignin, result, machineGroup, machineDecscription, multiJob)
     if Screen.check(34, 3, "CMS Main Menu") or startFromSignin = true Then
         Input.setCursor 7, 20
-        setMachine  result, machineGroup, defaultSeq
+        setMachine  result, machineGroup, machineDecscription, multiJob
     else
         MsgBox("Please start on the CMS Main Menu or Sign in menu")
     end if
@@ -160,7 +179,7 @@ function findName(number)
     findName = "false"
 end function
 
-sub setMachine(result, machineGroup, defaultSeq)
+sub setMachine(result, machineGroup, machineDecscription, multiJob)
     Dim newMachine
     Set newMachine = new JSONClass
     newMachine.Load(getMachineServer(result))
@@ -168,7 +187,8 @@ sub setMachine(result, machineGroup, defaultSeq)
     if newMachine.Object.Machine = "null" Then
         Machine.Object.Machine = result
         Machine.Object.MachineGroup = machineGroup
-        Machine.Object.DefaultSequence = defaultSeq
+        Machine.Object.Description = machineDecscription
+        Machine.Object.MultiJob = multiJob
         Machine.Object.Status = "Idle"
     end if
     Input.setCursor 7, 20
@@ -179,7 +199,7 @@ sub setMachine(result, machineGroup, defaultSeq)
     Dim message
     startShift Machine.Object.Machine, Employee.Object.Number
     saveMachine(Machine)
-    message = "Machine " & Machine.Object.Machine
+    message = "Resource " & Machine.Object.Machine
     message = message & " (" & text.removeIfNull(Machine.Object.Description) & ") was successfully set."  
     msgbox(message)
 end sub
@@ -293,13 +313,8 @@ end function
 
 sub startShift(machinename, Employee)
    if logInScanning() And logInToResource(machinename) Then
-        Dim description
-        description = logMachineAsRunning(Employee)
-        if Trim(description) <> "" Then
-            Machine.Object.Description = Trim(description)
-        end if
-        logOut 3, 3
    end if
+    logOut 3, 3
 end sub
 
 function logMachineAsRunning(EmployeeCode)
@@ -317,10 +332,9 @@ function logMachineAsRunning(EmployeeCode)
         Input.key("[enter]")
    end if
    if Screen.check(29, 12, "Press < F1 > to Proceed") = True Then
-        msgbox("Reporting Date not the same as today's date, consider signing out the machine")
+        msgbox("Reporting Date not the same as today's date, consider signing out the Resource")
         Input.key("[pf1]")
    end if
-   logMachineAsRunning = Screen.text(21, 4, 35)
 end function
 
 sub saveMachine(JsonObj)
