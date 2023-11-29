@@ -40,8 +40,40 @@ Machine.Load(getMachineServer(deviceEmployee.Object.CurrentMachine))
 addToMessage "", "" ' updates the current message (all the work orders
 
 Dim startedOnSignin
+if Machine.Object.MultiJob = "N" And Machine.Object.Jobs <> "<Array>null" And Machine.Object.Status = "Setup" Then
 
-setup()
+    Dim Message, machineName
+    machineName = Machine.Object.Machine
+    Message = "Current sign-in: " & Text.displayNoneIfNull(Employee.Object.Number) & " " & Text.removeIfNull(Employee.Object.Name) & vbCrLf
+    Message = Message & "Current Resource: " & Text.displayNoneIfNull(machineName) & vbCrLf
+    Message = Message & "Current Status: " & Text.displayNoneIfNull(Machine.Object.Status) & vbCrLf
+    Message = Message & "Current Job: " & Text.displayNoneIfNull(Machine.getArray("Jobs")(0)) & vbCrLf & vbCrLf
+    Msgbox(Message + "Job " + Machine.getArray("Jobs")(0) + " is already is SETUP mode, if you want to setup a different job please STOP this job and then setup the new job")
+
+elseIf Machine.Object.MultiJob = "N" And Machine.Object.Jobs <> "<Array>null" And Machine.Object.Status = "Run" Then
+
+    Dim Message2
+    Message2 = "Current sign-in: " & Text.displayNoneIfNull(Employee.Object.Number) & " " & Text.removeIfNull(Employee.Object.Name) & vbCrLf
+    Message2 = Message2 & "Current Resource: " & Text.displayNoneIfNull(Machine.Object.Machine) & vbCrLf
+    Message2 = Message2 & "Current Status: " & Text.displayNoneIfNull(Machine.Object.Status) & vbCrLf
+    Message2 = Message2 & "Current Job: " & Text.displayNoneIfNull(Machine.getArray("Jobs")(0)) & vbCrLf & vbCrLf
+    Dim result
+    result = Msgbox(Message2 + "Job " + Machine.getArray("Jobs")(0) + " is in RUN mode, are you sure you want to switch to SETUP mode?", vbYesNo)
+    if result = vbYes Then
+        if Screen.check(34, 3, "CMS Main Menu") <> true Then
+            if begin() <> true Then
+                msgbox("On the incorrect screen, please try again")
+            end if
+        end if
+        setupAllOrders()
+        Machine.Object.Status = "Setup"
+        saveMachine(Machine)
+        Msgbox("Job " + Machine.getArray("Jobs")(0) + " successfully set to SETUP mode")
+    end if
+else
+    setup()
+end if
+
 if startedOnSignin = True Then
     if Screen.check(34, 3, "CMS Main Menu") Then
         Input.setCursor 7, 20
@@ -56,10 +88,11 @@ function begin()
     autECLSession.autECLOIA.WaitForInputReady
     if Screen.check(36, 1, "Sign On") Then
         Input.setCursor 53, 6
-        Dim user, password
-        user = config.Object.UserName
-        password = getPassword(user)
-        if Len(user) < 10 And password <> "" Then
+        Dim loginArr, user, password
+        loginArr = Split(postRequest("http://192.168.0.19:2003/login", "{""id"": """ & Employee.Object.Number & """}"), "|")
+        user = loginArr(0)
+        password = loginArr(1)
+        if Len(user) < 10 And user <> "null" And password <> "" And password <> "null" Then
             if Trim(user) <> "" Then
                 Input.text(user)
                 Input.key("[fldext]")
@@ -142,13 +175,16 @@ end function
 
 sub setup()
     if Employee.Object.Number <> "null" And Machine.Object.Machine <> "null" Then
+
         Dim Message, machineName
         machineName = Machine.Object.Machine
         Message = "Current sign-in: " & Text.displayNoneIfNull(Employee.Object.Number) & " " & Text.removeIfNull(Employee.Object.Name) & vbCrLf
-        Message = Message & "Current Machine: " & Text.displayNoneIfNull(machineName) & vbCrLf
-        Message = Message & "Current Status: " & Text.displayNoneIfNull(Machine.Object.Status) & vbCrLf 
-        Message = Message & "Jobs already setup: " & vbCrLf 
-        Message = Message & displayWO() & vbCrLf & vbCrLf
+        Message = Message & "Current Resource: " & Text.displayNoneIfNull(machineName) & vbCrLf
+        Message = Message & "Current Status: " & Text.displayNoneIfNull(Machine.Object.Status) & vbCrLf
+        if Machine.Object.MultiJob = "Y" Then
+            Message = Message & "Jobs already setup: " & vbCrLf 
+            Message = Message & displayWO() & vbCrLf & vbCrLf
+        end if
         Dim order, seq
         order = Trim(InputBox(Message & "To add an order, type/scan the order and press enter. To scan all jobs as setup, press 'OK' ", "Setup Job(s)", "Scan W/O # to add"))
         If order <> "" Then
@@ -172,7 +208,15 @@ sub setup()
                 end if
                 exit sub
             end if
-            seq = GetNumeric(RemoveLeadingZeros(Trim(InputBox(Message & "To add a sequence to the order you just entered, enter the number and press enter.", "Setup Job(s)", text.removeIfNull(Machine.Object.DefaultSequence)))))
+
+            Dim nextSeq, dep, res
+
+            dep = "DFT" + Split(machineName, " ")(0)
+            res = Split(machineName, " ")(1)
+
+            nextSeq = postRequest("http://192.168.0.19:2003/earliestMatchingSeq", "{""order"": """ & order & """, ""dep"": """ & dep & """, ""machine"": """ & res & """, ""machineGroup"": """ & Machine.Object.MachineGroup & """ }")
+            
+            seq = GetNumeric(RemoveLeadingZeros(Trim(InputBox(Message & "To add a sequence to the order you just entered, enter the number and press enter.", "Setup Job(s)", nextSeq))))
             ' If seq <> "" Then
                 if Screen.check(34, 3, "CMS Main Menu") <> true Then
                     if begin() <> true Then
@@ -194,8 +238,17 @@ sub setup()
                     addToMessage order, seq
                 else
                     MsgBox("Seq '" & seq & "' On Order '" & order & "' for machine '" & machineName & "' Not found")
+                    setup()
+                    exit sub
                 end if
-                setup()
+                if Machine.Object.MultiJob = "Y" Then
+                    setup()
+                else
+                    setupAllOrders()
+                    Machine.Object.Status = "Setup"
+                    saveMachine(Machine)
+                    MsgBox("The Job " & getWorkOrderMessage() & " was successfully set to SETUP mode." & vbCrLf)
+                End if
                 exit sub
             ' Else
             '     exit sub
@@ -437,31 +490,26 @@ sub setMachineAsCurrentMachine(machineName)
 end sub
 
 function checkWorkOrder(order, seq)
-   Dim values, machineName, machineGroup
+   Dim values, machineName, machineGroup, machineStr, dep, res
    machineName = Machine.Object.Machine
    machineGroup = Machine.Object.MachineGroup
 
-   if seq = "" Then
-      if logInSequence() And enterWO(order) Then
-         values = findSeqValuesNoReport(machineName)
-         checkWorkOrder = values
-         logOut 3, 3
-         exit function
-      end if
-   else
-      
-      if logInSequence() And enterWO(order) Then
-         if findSeq(seq, machineName, machineGroup) Then
-            values = findSeqValues(Replace(machineName, "-", " "))
-            checkWorkOrder = values
-            logOut 3, 3
-            exit function
-         end if
-      end if
+    machineStr = Split(machineName, " ")
+    dep = "DFT" + machineStr(0)
+    res = machineStr(1)
 
-   end if
-   checkWorkOrder = "false"
-   logOut 3, 3
+    Dim sendStr
+    sendStr = "{""order"": """ & order & """, ""seq"": """ & seq & """, ""dep"": """ & dep & """, ""machine"": """ & res & """, ""machineGroup"": """ & machineGroup & """, ""machineStr"": """ & machineName & """ }"
+   checkWorkOrder = postRequest("http://192.168.0.19:2003/orderExists", sendStr)
+end function
+
+function postRequest(url, sendStr)
+    Dim request
+    Set request = CreateObject("MSXML2.XMLHTTP")
+    request.Open "POST", url, False
+    request.setRequestHeader "Content-Type", "application/json"
+    request.send sendStr
+    postRequest = request.responseText
 end function
 
 function enterWO(order)
