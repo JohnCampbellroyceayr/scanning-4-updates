@@ -50,16 +50,25 @@ if startedOnSignin = True Then
     end if
 end if
 
+function postRequest(url, sendStr)
+    Dim request
+    Set request = CreateObject("MSXML2.XMLHTTP")
+    request.Open "POST", url, False
+    request.setRequestHeader "Content-Type", "application/json"
+    request.send sendStr
+    postRequest = request.responseText
+end function
 
 function begin()
     autECLSession.autECLOIA.WaitForAppAvailable
     autECLSession.autECLOIA.WaitForInputReady
     if Screen.check(36, 1, "Sign On") Then
         Input.setCursor 53, 6
-        Dim user, password
-        user = config.Object.UserName
-        password = getPassword(user)
-        if Len(user) < 10 And password <> "" Then
+        Dim loginArr, user, password
+        loginArr = Split(postRequest("http://192.168.0.19:2003/login", "{""id"": """ & Employee.Object.Number & """}"), "|")
+        user = loginArr(0)
+        password = loginArr(1)
+        if Len(user) < 10 And user <> "null" And password <> "" And password <> "null" Then
             if Trim(user) <> "" Then
                 Input.text(user)
                 Input.key("[fldext]")
@@ -140,56 +149,138 @@ function prepareRun(startFromSignin)
     end if
 end function
 
+sub insertWorkOrder()
+    Dim order, seq, machineName
+
+    machineName = Machine.Object.Machine
+    order = Trim(InputBox("To add an order, type/scan the order and press enter. ", "Enter Job(s)"))
+
+    Dim nextSeq, dep, res
+
+    dep = "DFT" + Split(machineName, " ")(0)
+    res = Split(machineName, " ")(1)
+
+    nextSeq = postRequest("http://192.168.0.19:2003/earliestMatchingSeq", "{""order"": """ & order & """, ""dep"": """ & dep & """, ""machine"": """ & res & """, ""machineGroup"": """ & Machine.Object.MachineGroup & """ }")
+    seq = GetNumeric(RemoveLeadingZeros(Trim(InputBox("To add a sequence to the order you just entered, enter the number and press enter.", "Setup Job(s)", nextSeq))))
+    
+    Dim result
+    result = Split(checkWorkOrder(order, seq), "|")
+
+    if result(0) <> "false" Then
+        addToMachine order, seq, result(0), result(1), result(2), result(3)
+        reportGood
+    else
+        MsgBox("Seq '" & seq & "' On Order '" & order & "' for machine '" & machineName & "' Not found")
+        exit sub
+    end if
+end sub
+
+sub addToMachine(job, seq, report, partNumber, piecesNeeded, piecesCompleted)
+    Machine.Object.Jobs = addToArray(Machine.Object.Jobs, job)
+    Machine.Object.Sequences = addToArray(Machine.Object.Sequences, seq)
+    Machine.Object.PartNumbers = addToArray(Machine.Object.PartNumbers, partNumber)
+    Machine.Object.GoodPieces = addToArray(Machine.Object.GoodPieces, piecesCompleted)
+    Machine.Object.PiecesNeeded = addToArray(Machine.Object.PiecesNeeded, piecesNeeded)
+    Machine.Object.ReportingSequence = addToArray(Machine.Object.ReportingSequence, report)
+end sub
+
+function checkWorkOrder(order, seq)
+   Dim values, machineName, machineGroup, machineStr, dep, res
+   machineName = Machine.Object.Machine
+   machineGroup = Machine.Object.MachineGroup
+
+    machineStr = Split(machineName, " ")
+    dep = "DFT" + machineStr(0)
+    res = machineStr(1)
+
+    Dim sendStr
+    sendStr = "{""order"": """ & order & """, ""seq"": """ & seq & """, ""dep"": """ & dep & """, ""machine"": """ & res & """, ""machineGroup"": """ & machineGroup & """, ""machineStr"": """ & machineName & """ }"
+   checkWorkOrder = postRequest("http://192.168.0.19:2003/orderExists", sendStr)
+end function
+
 sub reportGood()
-    if Employee.Object.Number <> "null" And Machine.Object.Machine <> "null" And Machine.Object.Jobs <> "<Array>null" Then
+    if Employee.Object.Number = "null" Or Machine.Object.Machine = "null" Then
+        msgbox("You must sign-in and select a Resource")
+        exit sub
+    end if
+
+    if Machine.Object.Jobs <> "<Array>null" Then
         Dim Message, machineName
         machineName = Machine.Object.Machine
         Dim result
-        Message = "Current sign-in: " & Text.displayNoneIfNull(Employee.Object.Number) & " " & Text.removeIfNull(Employee.Object.Name) & vbCrLf
-        Message = Message & "Current Machine: " & Text.displayNoneIfNull(machineName) & vbCrLf
-        Message = Message & "Current Status: " & Text.displayNoneIfNull(Machine.Object.Status) & vbCrLf 
-        Message = Message & "Enter the Index Number for the job you need to report good pieces." & vbCrLf
-        Message = Message & displayOrdersGoodPieces() & vbCrLf
-        result = InputBox(Message, "Good Pieces")
-        If Trim(result) <> "" Then
-            Dim index, jobs 
-            On Error Resume Next
-            index = CInt(result)
-            Dim job
-            job = Machine.getArray("Jobs")(index - 1)
-            Dim goodPiecesStr
-            goodPiecesStr = "W/O: " & Machine.getArray("Jobs")(index - 1) & " "
-            goodPiecesStr = goodPiecesStr & "SEQ: " & Machine.getArray("Sequences")(index - 1)
-            If Err.Number <> 0 Then
-                MsgBox("Please enter only numbers and an acceptable number")
-                reportGood()
-                exit sub
-            else
+        If Machine.Object.MultiJob = "N" Then
+            reportGoodSingleMode
+            exit sub
+        End if
+        
+        Dim i, numJobs
+        for i = 0 to UBound(Machine.getArray("Jobs"))
+            numJobs = UBound(Machine.getArray("Jobs"))
+            scanPiecesOnJob(i)
+            if numJobs <> UBound(Machine.getArray("Jobs")) Then
+                i = i - 1
             end if
-            On Error GoTo 0
-            Dim numPieces, numberOfPieces, message2, remaining
-            remaining = CStr(getRemainingPieces(index - 1))
-            message2 = "Enter the number of good pieces on " & job & vbCrLf
-            message2 = message2 & "Total required: " & Machine.getArray("PiecesNeeded")(index - 1) & vbCrLf
-            message2 = message2 & "Already Reported: " & Machine.getArray("GoodPieces")(index - 1) & vbCrLf
-            message2 = message2 & "Still Needed: " & remaining & vbCrLf
-            numPieces = InputBox(message2, "Number of good pieces", remaining)
+        next
+    else
+        insertWorkOrder()
+    end if
+end sub
+
+sub scanPiecesOnJob(index)
+    if UBound(Machine.getArray("Jobs")) >= index Then
+        if Msgbox("Do you want to scan good pieces on " & Machine.getArray("Jobs")(index) & "?", vbYesNo) = vbYes Then
+            Dim confirm, numPieces, numberOfPieces, message2, remaining
+            remaining = CStr(getRemainingPieces(index))
+            message2 = "Job " & Machine.getArray("Jobs")(index) & " needs " & Machine.getArray("PiecesNeeded")(index) & " piece(s) and still needs " & remaining & " piece(s) scanned off, would you like to scan all " & remaining & " piece(s) GOOD?"
+            confirm = msgbox(message2, vbYesNoCancel)
+            if confirm = vbCancel Then
+                exit sub
+            end if
+            if confirm = vbYes Then
+                if remaining <> 0 Then
+                    scanGoodPieces index, remaining
+                end if
+                exit sub
+            end if    
+            numPieces = InputBox("How many piece(s) would you like to scan?", "Number of good pieces", remaining)
             On Error Resume Next
             numberOfPieces = CInt(numPieces)
             If Err.Number <> 0 Or numberOfPieces < 1 Or InStr(numPieces, ".") Then
                 MsgBox("Please enter only numbers and a number bigger than 0")
-                reportGood()
+                scanPiecesOnJob(index)
                 On Error GoTo 0
                 exit sub
             end if
             On Error GoTo 0
-            scanGoodPieces index - 1, numPieces
-        Else
-            exit sub
-        End If
-    else
-        msgbox("You must sign-in and select a machine and have at least 1 job in the machine")
+            scanGoodPieces index, numPieces
+        End if
+    End if
+end sub
+
+sub reportGoodSingleMode()
+    Dim confirm, numPieces, numberOfPieces, message2, remaining
+    remaining = CStr(getRemainingPieces(0))
+    message2 = "Job " & Machine.getArray("Jobs")(0) & " needs " & Machine.getArray("PiecesNeeded")(0) & " piece(s) and still needs " & remaining & " piece(s) scanned off, would you like to scan all " & remaining & " piece(s) GOOD?"
+    confirm = msgbox(message2, vbYesNoCancel)
+    if confirm = vbYes Then
+        if remaining <> 0 Then
+            scanGoodPieces 0, remaining
+        end if
+        exit sub
+    elseif confirm = vbCancel Then
+        exit sub
     end if
+    numPieces = InputBox("How many piece(s) would you like to scan?", "Number of good pieces", remaining)
+    On Error Resume Next
+    numberOfPieces = CInt(numPieces)
+    If Err.Number <> 0 Or numberOfPieces < 1 Or InStr(numPieces, ".") Then
+        MsgBox("Please enter only numbers and a number bigger than 0")
+        reportGoodSingleMode()
+        On Error GoTo 0
+        exit sub
+    end if
+    On Error GoTo 0
+    scanGoodPieces 0, numPieces
 end sub
 
 function getRemainingPieces(index)
@@ -570,34 +661,6 @@ sub setMachineAsCurrentMachine(machineName)
     Employee.Object.OtherMachines = "<Array>" & str & Employee.Object.CurrentMachine
     Employee.Object.CurrentMachine = machineName
 end sub
-
-function checkWorkOrder(order, seq)
-   Dim values, machineName, machineGroup
-   machineName = Machine.Object.Machine
-   machineGroup = Machine.Object.MachineGroup
-
-   if seq = "" Then
-      if logInSequence() And enterWO(order) Then
-         values = findSeqValuesNoReport(machineName)
-         checkWorkOrder = values
-         logOut 3, 3
-         exit function
-      end if
-   else
-      
-      if logInSequence() And enterWO(order) Then
-         if findSeq(seq, machineName, machineGroup) Then
-            values = findSeqValues(Replace(machineName, "-", " "))
-            checkWorkOrder = values
-            logOut 3, 3
-            exit function
-         end if
-      end if
-
-   end if
-   checkWorkOrder = "false"
-   logOut 3, 3
-end function
 
 function enterWO(order)
    Input.text(order)
