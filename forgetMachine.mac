@@ -47,15 +47,25 @@ if startedOnSignin = True Then
     end if
 end if
 
+function postRequest(url, sendStr)
+    Dim request
+    Set request = CreateObject("MSXML2.XMLHTTP")
+    request.Open "POST", url, False
+    request.setRequestHeader "Content-Type", "application/json"
+    request.send sendStr
+    postRequest = request.responseText
+end function
+
 function begin()
     autECLSession.autECLOIA.WaitForAppAvailable
     autECLSession.autECLOIA.WaitForInputReady
     if Screen.check(36, 1, "Sign On") Then
         Input.setCursor 53, 6
-        Dim user, password
-        user = config.Object.UserName
-        password = getPassword(user)
-        if Len(user) < 10 And password <> "" Then
+        Dim loginArr, user, password
+        loginArr = Split(postRequest("http://192.168.0.19:2003/login", "{""id"": """ & Employee.Object.Number & """}"), "|")
+        user = loginArr(0)
+        password = loginArr(1)
+        if Len(user) < 10 And user <> "null" And password <> "" And password <> "null" Then
             if Trim(user) <> "" Then
                 Input.text(user)
                 Input.key("[fldext]")
@@ -142,7 +152,7 @@ sub removeMachine()
         machineName = Machine.Object.Machine
         Dim result
         Message = "Current sign-in: " & Text.displayNoneIfNull(Employee.Object.Number) & " " & Text.removeIfNull(Employee.Object.Name) & vbCrLf
-        Message = Message & "Press the index of the Machine you want to remove." & vbCrLf
+        Message = Message & "Press the index of the Resource you want to remove." & vbCrLf
         Message = Message & displayMachines() & vbCrLf
         result = InputBox(Message, "End Jobs")
         If Trim(result) <> "" Then
@@ -162,12 +172,12 @@ sub removeMachine()
             end if
             On Error GoTo 0
             removeMachineFromUser(index)
-            msgbox("The following machine has been removed successfully:" & vbCrLf & removedMachineString)
+            msgbox("The following Resource has been removed successfully:" & vbCrLf & removedMachineString)
         Else
             exit sub
         End If
     else
-        msgbox("You must sign-in and select a machine")
+        msgbox("You must sign-in and select a Resource")
     end if
 end sub
 
@@ -204,7 +214,7 @@ function displayMachines()
     machineArr = Employee.getArray("OtherMachines")
     str = "Current Machine: " & vbCrLf & "Press 0 to forget " & Employee.Object.CurrentMachine & vbCrLf
     if Employee.Object.OtherMachines <> "<Array>null" Then
-        str = str & "Other Machines: " & vbCrLf
+        str = str & "Other Resources: " & vbCrLf
         for i = 0 to UBound(machineArr) step 1
             str = str & "Press " & CStr(i + 1) & " to forget: " & machineArr(i) & vbCrLf
         next
