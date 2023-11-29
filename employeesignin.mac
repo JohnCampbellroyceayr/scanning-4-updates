@@ -51,6 +51,7 @@ function getEmployeeServer(number)
 end function
 
 
+
 sub signIn()
     Dim newEmployee
     newEmployee = Trim(InputBox("Current Sign-in: " & Text.displayNoneIfNull(Employee.Object.Number) & " " & Text.removeIfNull(Employee.Object.Name), "Input your employee #", text.removeIfNull(Employee.Object.Number)))
@@ -93,27 +94,17 @@ sub setEmployeeOnServer(JsonObj)
     File.write filePath, JsonObj.stringify()
 end sub
 
+function postRequest(url, sendStr)
+    Dim request
+    Set request = CreateObject("MSXML2.XMLHTTP")
+    request.Open "POST", url, False
+    request.setRequestHeader "Content-Type", "application/json"
+    request.send sendStr
+    postRequest = request.responseText
+end function
+
 function employeeExists(employee)
-    Dim filePath, fileContent, line, lines
-    filePath = "\\192.168.0.13\Engdrawing\Inspection Logs\Scanning Files\employees\EmployeeList.txt"
-    fileContent = File.read(filePath)
-    lines = Split(fileContent, vbCrLf)
-    For Each line In lines
-        If InStr(line, employee & vbTab) = 1 Then
-            Dim lineArr, i, result
-            lineArr = Split(line, vbTab)
-            For i = 0 To UBound(lineArr) - 1
-                If i = 1 Then
-                    result = lineArr(i)
-                ElseIf i < UBound(lineArr) Then
-                    result = result & " " & lineArr(i)
-                End If
-            Next
-            employeeExists = result
-            Exit function
-        End If
-    Next
-    employeeExists = "null"
+    employeeExists = postRequest("http://192.168.0.19:2003/getEmployee", "{""id"": """ & employee & """}")
 end function
 
 ' default classes
