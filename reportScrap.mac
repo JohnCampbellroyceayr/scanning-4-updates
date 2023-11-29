@@ -50,16 +50,36 @@ if startedOnSignin = True Then
     end if
 end if
 
+function getRequest(url)
+
+    Dim request
+    Set request = CreateObject("MSXML2.XMLHTTP")
+    url = url & "?cachebuster=" & Now()  ' Add a cache-busting parameter to the URL
+    request.Open "GET", url, False
+    request.send
+    getRequest = request.responseText
+    
+End function
+
+function postRequest(url, sendStr)
+    Dim request
+    Set request = CreateObject("MSXML2.XMLHTTP")
+    request.Open "POST", url, False
+    request.setRequestHeader "Content-Type", "application/json"
+    request.send sendStr
+    postRequest = request.responseText
+end function
 
 function begin()
     autECLSession.autECLOIA.WaitForAppAvailable
     autECLSession.autECLOIA.WaitForInputReady
     if Screen.check(36, 1, "Sign On") Then
         Input.setCursor 53, 6
-        Dim user, password
-        user = config.Object.UserName
-        password = getPassword(user)
-        if Len(user) < 10 And password <> "" Then
+        Dim loginArr, user, password
+        loginArr = Split(postRequest("http://192.168.0.19:2003/login", "{""id"": """ & Employee.Object.Number & """}"), "|")
+        user = loginArr(0)
+        password = loginArr(1)
+        if Len(user) < 10 And user <> "null" And password <> "" And password <> "null" Then
             if Trim(user) <> "" Then
                 Input.text(user)
                 Input.key("[fldext]")
@@ -140,52 +160,117 @@ function prepareRun(startFromSignin)
     end if
 end function
 
+sub reportScrapSingleMode()
+    Dim confirm, numPieces, numberOfPieces, message2, remaining
+    numPieces = InputBox("How many pieces on Job " & Machine.getArray("Jobs")(0) & " would you like to scan SCRAP?", "Number of scrap pieces")
+    On Error Resume Next
+    numberOfPieces = CInt(numPieces)
+    If Err.Number <> 0 Or numberOfPieces < 1 Or InStr(numPieces, ".") Then
+        MsgBox("Please enter only numbers and a number bigger than 0")
+        reportScrapSingleMode()
+        On Error GoTo 0
+        exit sub
+    end if
+    On Error GoTo 0
+    scanScrapPieces 0, numPieces
+end sub
+
+sub insertWorkOrder()
+    Dim order, seq, machineName
+
+    machineName = Machine.Object.Machine
+    order = Trim(InputBox("To add an order, type/scan the order and press enter. ", "Enter Job(s)"))
+
+    Dim nextSeq, dep, res
+
+    dep = "DFT" + Split(machineName, " ")(0)
+    res = Split(machineName, " ")(1)
+
+    nextSeq = postRequest("http://192.168.0.19:2003/earliestMatchingSeq", "{""order"": """ & order & """, ""dep"": """ & dep & """, ""machine"": """ & res & """, ""machineGroup"": """ & Machine.Object.MachineGroup & """ }")
+    seq = GetNumeric(RemoveLeadingZeros(Trim(InputBox("To add a sequence to the order you just entered, enter the number and press enter.", "Setup Job(s)", nextSeq))))
+    
+    Dim result
+    result = Split(checkWorkOrder(order, seq), "|")
+
+    if result(0) <> "false" Then
+        addToMachine order, seq, result(0), result(1), result(2), result(3)
+        reportScrap
+    else
+        MsgBox("Seq '" & seq & "' On Order '" & order & "' for machine '" & machineName & "' Not found")
+        exit sub
+    end if
+end sub
+
+sub addToMachine(job, seq, report, partNumber, piecesNeeded, piecesCompleted)
+    Machine.Object.Jobs = addToArray(Machine.Object.Jobs, job)
+    Machine.Object.Sequences = addToArray(Machine.Object.Sequences, seq)
+    Machine.Object.PartNumbers = addToArray(Machine.Object.PartNumbers, partNumber)
+    Machine.Object.GoodPieces = addToArray(Machine.Object.GoodPieces, piecesCompleted)
+    Machine.Object.PiecesNeeded = addToArray(Machine.Object.PiecesNeeded, piecesNeeded)
+    Machine.Object.ReportingSequence = addToArray(Machine.Object.ReportingSequence, report)
+end sub
+
+function checkWorkOrder(order, seq)
+   Dim values, machineName, machineGroup, machineStr, dep, res
+   machineName = Machine.Object.Machine
+   machineGroup = Machine.Object.MachineGroup
+
+    machineStr = Split(machineName, " ")
+    dep = "DFT" + machineStr(0)
+    res = machineStr(1)
+
+    Dim sendStr
+    sendStr = "{""order"": """ & order & """, ""seq"": """ & seq & """, ""dep"": """ & dep & """, ""machine"": """ & res & """, ""machineGroup"": """ & machineGroup & """, ""machineStr"": """ & machineName & """ }"
+   checkWorkOrder = postRequest("http://192.168.0.19:2003/orderExists", sendStr)
+end function
+
 sub reportScrap()
-    if Employee.Object.Number <> "null" And Machine.Object.Machine <> "null" And Machine.Object.Jobs <> "<Array>null" Then
+    if Employee.Object.Number = "null" Or Machine.Object.Machine = "null" Then
+        msgbox("You must sign-in and select a Resource")
+        exit sub
+    end if
+
+    if Machine.Object.Jobs <> "<Array>null" Then
         Dim Message, machineName
         machineName = Machine.Object.Machine
         Dim result
-        Message = "Current sign-in: " & Text.displayNoneIfNull(Employee.Object.Number) & " " & Text.removeIfNull(Employee.Object.Name) & vbCrLf
-        Message = Message & "Current Machine: " & Text.displayNoneIfNull(machineName) & vbCrLf
-        Message = Message & "Current Status: " & Text.displayNoneIfNull(Machine.Object.Status) & vbCrLf 
-        Message = Message & "Enter the Index Number for the job you need to report scrap pieces." & vbCrLf
-        Message = Message & displayOrdersScrapPieces() & vbCrLf
-        result = InputBox(Message, "Scrap Pieces")
-        If Trim(result) <> "" Then
-            Dim index, jobs 
-            On Error Resume Next
-            index = CInt(result)
-            Dim job
-            job = Machine.getArray("Jobs")(index - 1)
-            Dim scrapPiecesStr
-            scrapPiecesStr = "W/O: " & Machine.getArray("Jobs")(index - 1) & " "
-            scrapPiecesStr = scrapPiecesStr & "SEQ: " & Machine.getArray("Sequences")(index - 1)
-            If Err.Number <> 0 Then
-                MsgBox("Please enter only numbers and an acceptable number")
-                reportScrap()
-                exit sub
-            else
-            end if
-            On Error GoTo 0
-            Dim numPieces, numberOfPieces
-            numPieces = InputBox("Enter the number of scrap pieces on " & job, "Number of scrap pieces", "1")
+        If Machine.Object.MultiJob = "N" Then
+            reportScrapSingleMode
+            exit sub
+        End if
+        
+        Dim i, numJobs
+        for i = 0 to UBound(Machine.getArray("Jobs"))
+            if scanScrapPiecesOnJob(i) = True Then
+                exit for
+            End if
+        next
+    else
+        insertWorkOrder()
+    end if
+end sub
+
+Function scanScrapPiecesOnJob(index)
+    if UBound(Machine.getArray("Jobs")) >= index Then
+        if Msgbox("Do you want to scan scrap pieces on " & Machine.getArray("Jobs")(index) & "?", vbYesNo) = vbYes Then
+            Dim confirm, numPieces, numberOfPieces
+            numPieces = InputBox("How many pieces on Job " & Machine.getArray("Jobs")(index) & " would you like to scan SCRAP?", "Number of scrap pieces")
             On Error Resume Next
             numberOfPieces = CInt(numPieces)
             If Err.Number <> 0 Or numberOfPieces < 1 Or InStr(numPieces, ".") Then
                 MsgBox("Please enter only numbers and a number bigger than 0")
-                reportScrap()
+                scanPiecesOnJob(index)
                 On Error GoTo 0
-                exit sub
+                exit Function
             end if
             On Error GoTo 0
-            scanScrapPieces index - 1, numPieces
-        Else
-            exit sub
-        End If
-    else
-        msgbox("You must sign-in and select a machine and have at least 1 job in the machine")
-    end if
-end sub
+            scanScrapPieces index, numPieces
+            scanScrapPiecesOnJob = True
+            exit Function
+        End if
+    End if
+    scanScrapPiecesOnJob = False
+end Function
 
 function getRemainingPieces(index)
     Dim goodPieces, neededPieces
@@ -246,7 +331,6 @@ function logWOEmpScrap(order, seq, pieces, employee)
 end function
 
 function inputScrapCode(code)
-   Input.key("[pf7]")
    Input.setCursor 35, 16
    Input.text(code)
    Input.key("[enter]")
@@ -310,53 +394,11 @@ end function
 
 
 function getAllReasonCodes()
-   Input.key("[pf4]")
-   goToTopOfList()
-
-   dim codeStr, descriptionStr, lengthArray, colOffset, lastCode, returnArr(1)
-   while Screen.check(48, 17, " ") = false And lengthArray < 90
-      colOffset = 7
-      while Screen.check(42, colOffset, " ") = false and colOffset < 20
-         if Screen.text(42, colOffset, 2) + "," <> lastCode Then
-            lastCode = Screen.text(42, colOffset, 2) + ","
-            codeStr = codeStr + lastCode
-            descriptionStr = descriptionStr + Trim(Screen.text(48, colOffset, 30)) + ","
-         end if
-         colOffset = colOffset + 1
-      wend
-      lengthArray = lengthArray + 1
-
-      Input.key("[roll up]")
-   wend
-   colOffset = 7
-   while Screen.check(42, colOffset, " ") = false and colOffset < 20
-      if Screen.text(42, colOffset, 2) + "," <> lastCode Then
-         lastCode = Screen.text(42, colOffset, 2) + ","
-         codeStr = codeStr + lastCode
-         descriptionStr = descriptionStr + Trim(Screen.text(48, colOffset, 30)) + ","
-      end if
-      colOffset = colOffset + 1
-   wend
-   returnArr(0) = codeStr
-   returnArr(1) = descriptionStr
-   getAllReasonCodes = returnArr
+    Dim codeStr
+    codeStr = getRequest("http://192.168.0.19:2003/scrapCodes")
+    getAllReasonCodes = Split(codeStr, "-|-")
 end function
 
-function goToTopOfList()
-   dim firstCode, newCode, failSafe
-   failSafe = 0
-   firstCode = Screen.text(42, 7, 2)
-   Input.key("[roll down]")
-   newCode = Screen.text(42, 7, 2)
-   while firstCode <> newCode And failSafe < 50
-      failSafe = failSafe + 1
-      if firstCode > newCode Then
-         firstCode = newCode
-      end if
-      Input.key("[roll down]")
-      newCode = Screen.text(42, 7, 2)
-   wend
-end function
 
 function scanScrapPiecesOrderNoReport(job, machine, employee, pieces)
    Input.text(job)
@@ -670,34 +712,6 @@ sub setMachineAsCurrentMachine(machineName)
     Employee.Object.OtherMachines = "<Array>" & str & Employee.Object.CurrentMachine
     Employee.Object.CurrentMachine = machineName
 end sub
-
-function checkWorkOrder(order, seq)
-   Dim values, machineName, machineGroup
-   machineName = Machine.Object.Machine
-   machineGroup = Machine.Object.MachineGroup
-
-   if seq = "" Then
-      if logInSequence() And enterWO(order) Then
-         values = findSeqValuesNoReport(machineName)
-         checkWorkOrder = values
-         logOut 3, 3
-         exit function
-      end if
-   else
-      
-      if logInSequence() And enterWO(order) Then
-         if findSeq(seq, machineName, machineGroup) Then
-            values = findSeqValues(Replace(machineName, "-", " "))
-            checkWorkOrder = values
-            logOut 3, 3
-            exit function
-         end if
-      end if
-
-   end if
-   checkWorkOrder = "false"
-   logOut 3, 3
-end function
 
 function enterWO(order)
    Input.text(order)
