@@ -40,6 +40,8 @@ Machine.Load(getMachineServer(deviceEmployee.Object.CurrentMachine))
 addToMessage "", "" ' updates the current message (all the work orders
 
 Dim startedOnSignin
+Dim endMessage
+endMessage = ""
 
 reportGood()
 if startedOnSignin = True Then
@@ -48,6 +50,10 @@ if startedOnSignin = True Then
         Input.text("90")
         Input.key("[enter]")
     end if
+end if
+
+if endMessage <> "" Then
+    msgbox endMessage
 end if
 
 function postRequest(url, sendStr)
@@ -231,7 +237,26 @@ sub scanPiecesOnJob(index)
         if Msgbox("Do you want to scan good pieces on " & Machine.getArray("Jobs")(index) & "?", vbYesNo) = vbYes Then
             Dim confirm, numPieces, numberOfPieces, message2, remaining
             remaining = CStr(getRemainingPieces(index))
-            message2 = "Job " & Machine.getArray("Jobs")(index) & " needs " & Machine.getArray("PiecesNeeded")(index) & " piece(s) and still needs " & remaining & " piece(s) scanned off, would you like to scan all " & remaining & " piece(s) GOOD?"
+            message2 = "Job " & Machine.getArray("Jobs")(index) & " seq " & Machine.getArray("Sequences")(index) & " requires " & Machine.getArray("PiecesNeeded")(index) & " piece(s) total. " & vbCrLf
+            message2 = message2 & Machine.getArray("GoodPieces")(index) & " have been reported so far." & vbCrLf
+            if remaining <> "0" Then
+                message2 = message2 & "Would you like to report the remaining " & remaining & " piece(s) GOOD?"
+                confirm = msgbox(message2, vbYesNoCancel)
+                if confirm = vbYes Then
+                    if remaining <> 0 Then
+                        scanGoodPieces 0, remaining
+                    end if
+                    exit sub
+                elseif confirm = vbCancel Then
+                    exit sub
+                end if
+            else
+                message2 = message2 & "Would you like to scan more than the required amount?"
+                confirm = msgbox(message2, vbYesNo)
+                if confirm = vbNo Then
+                    exit sub
+                end if
+            end if
             confirm = msgbox(message2, vbYesNoCancel)
             if confirm = vbCancel Then
                 exit sub
@@ -260,15 +285,25 @@ end sub
 sub reportGoodSingleMode()
     Dim confirm, numPieces, numberOfPieces, message2, remaining
     remaining = CStr(getRemainingPieces(0))
-    message2 = "Job " & Machine.getArray("Jobs")(0) & " needs " & Machine.getArray("PiecesNeeded")(0) & " piece(s) and still needs " & remaining & " piece(s) scanned off, would you like to scan all " & remaining & " piece(s) GOOD?"
-    confirm = msgbox(message2, vbYesNoCancel)
-    if confirm = vbYes Then
-        if remaining <> 0 Then
-            scanGoodPieces 0, remaining
+    message2 = "Job " & Machine.getArray("Jobs")(0) & " seq " & Machine.getArray("Sequences")(0) & " requires " & Machine.getArray("PiecesNeeded")(0) & " piece(s) total. " & vbCrLf
+    message2 = message2 & Machine.getArray("GoodPieces")(0) & " have been reported so far." & vbCrLf
+    if remaining <> "0" Then
+        message2 = message2 & "Would you like to report the remaining " & remaining & " piece(s) GOOD?"
+        confirm = msgbox(message2, vbYesNoCancel)
+        if confirm = vbYes Then
+            if remaining <> 0 Then
+                scanGoodPieces 0, remaining
+            end if
+            exit sub
+        elseif confirm = vbCancel Then
+            exit sub
         end if
-        exit sub
-    elseif confirm = vbCancel Then
-        exit sub
+    else
+        message2 = message2 & "Would you like to scan more than the required amount?"
+        confirm = msgbox(message2, vbYesNo)
+        if confirm = vbNo Then
+            exit sub
+        end if
     end if
     numPieces = InputBox("How many piece(s) would you like to scan?", "Number of good pieces", remaining)
     On Error Resume Next
@@ -343,7 +378,7 @@ function scanGoodPieces(index, number)
     end if
     saveMachine(Machine)
     logOut 3, 3
-    msgbox("Successfully scanned " & number & " good piece(s) on " & order)
+    endMessage = "Successfully scanned " & number & " good piece(s) on " & order
 end function
 
 function scanGoodPiecesOrderNoReport(job, machine, employee, pieces)
