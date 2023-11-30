@@ -59,18 +59,24 @@ sub begin()
         result = Trim(InputBox(Message, "Please Enter Resource code", Text.removeIfNull(machineName)))
         If result <> "" Then
             Dim EmployeeStr
-            Dim dep, res, returnStr, machineValuesArr
+            Dim dep, res, depRes, returnStr, machineValuesArr
+            depRes = Split(result, " ")
+            if Ubound(depRes) >= 1 Then
+                dep = "DFT" + Split(result, " ")(0)
+                res = Split(result, " ")(1)
 
-            dep = "DFT" + Split(result, " ")(0)
-            res = Split(result, " ")(1)
+                returnStr = postRequest("http://192.168.0.19:2003/getMachine", "{""dep"": """ & dep & """, ""machine"": """ & res & """ }")
 
-            returnStr = postRequest("http://192.168.0.19:2003/getMachine", "{""dep"": """ & dep & """, ""machine"": """ & res & """ }")
-            machineValuesArr = Split(returnStr, "|")
-            machineGroup = machineValuesArr(0)
-            machineDecscription = machineValuesArr(1)
-            multiJob = machineValuesArr(2)
-            
-            if machineGroup = "false" Then
+                machineValuesArr = Split(returnStr, "|")
+                machineGroup = machineValuesArr(0)
+
+                if machineValuesArr(0) <> "false" Then
+                    machineDecscription = machineValuesArr(1)
+                    multiJob = machineValuesArr(2)
+                end if
+            end if
+
+            if Ubound(depRes) = 0 or machineGroup = "false" Then
                 MsgBox("Could Not Find Resource " & result)
                 exit sub
             else
@@ -116,6 +122,9 @@ sub begin()
         end if
     else
         prepareRun false, result, machineGroup, machineDecscription, multiJob
+        message = "Resource " & Machine.Object.Machine
+        message = message & " (" & text.removeIfNull(Machine.Object.Description) & ") was successfully set."
+        msgbox(message)
         exit sub
     end if
     prepareRun true, result, machineGroup, machineDecscription, multiJob
@@ -124,6 +133,9 @@ sub begin()
         Input.text("90")
         Input.key("[enter]")
     end if
+    message = "Resource " & Machine.Object.Machine
+    message = message & " (" & text.removeIfNull(Machine.Object.Description) & ") was successfully set."
+    msgbox(message)
 end sub
 function getPassword(user) 
     Dim fileContents, lines, line
@@ -196,12 +208,8 @@ sub setMachine(result, machineGroup, machineDecscription, multiJob)
     setMachineAsCurrentMachine(result)
     File.write File.buildPath("scanning files/employee/employee.json"), Employee.stringify()
     setEmployeeOnServer(Employee)
-    Dim message
     startShift Machine.Object.Machine, Employee.Object.Number
     saveMachine(Machine)
-    message = "Resource " & Machine.Object.Machine
-    message = message & " (" & text.removeIfNull(Machine.Object.Description) & ") was successfully set."  
-    msgbox(message)
 end sub
 
 sub setMachineAsCurrentMachine(machineName)
