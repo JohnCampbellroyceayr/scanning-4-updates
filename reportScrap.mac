@@ -40,6 +40,8 @@ Machine.Load(getMachineServer(deviceEmployee.Object.CurrentMachine))
 addToMessage "", "" ' updates the current message (all the work orders
 
 Dim startedOnSignin
+Dim endMessage
+endMessage = ""
 
 reportScrap()
 if startedOnSignin = True Then
@@ -48,6 +50,10 @@ if startedOnSignin = True Then
         Input.text("90")
         Input.key("[enter]")
     end if
+end if
+
+if endMessage <> "" Then
+    msgbox endMessage
 end if
 
 function getRequest(url)
@@ -315,7 +321,7 @@ function scanScrapPieces(index, number)
         end if
     end if
     logOut 3, 3
-    msgbox("Successfully scanned " & number & " scrap piece(s) on " & order)
+    endMessage = "Successfully scanned " & number & " scrap piece(s) on " & order
 end function
 
 function logWOEmpScrap(order, seq, pieces, employee)
