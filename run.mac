@@ -41,6 +41,9 @@ addToMessage "", "" ' updates the current message (all the work orders
 
 Dim startedOnSignin
 
+Dim endMessage
+endMessage = ""
+
 if Machine.Object.MultiJob = "N" And Machine.Object.Jobs <> "<Array>null" And Machine.Object.Status = "Run" Then
 
     Dim Message, machineName
@@ -69,7 +72,7 @@ elseIf Machine.Object.MultiJob = "N" And Machine.Object.Jobs <> "<Array>null" An
         runAllOrders()
         Machine.Object.Status = "Run"
         saveMachine(Machine)
-        Msgbox("Job " + Machine.getArray("Jobs")(0) + " successfully set to RUN mode")
+        endMessage ="Job " + Machine.getArray("Jobs")(0) + " successfully set to RUN mode"
     end if
 else
     run()
@@ -82,6 +85,10 @@ if startedOnSignin = True Then
         Input.text("90")
         Input.key("[enter]")
     end if
+end if
+
+if endMessage <> "" Then
+    msgbox endMessage
 end if
 
 function postRequest(url, sendStr)
@@ -193,6 +200,8 @@ sub run()
         if Machine.Object.MultiJob = "Y" Then
             Message = Message & "Setup Jobs to run: " & vbCrLf
             Message = Message & displayWO() & vbCrLf & vbCrLf
+        Else
+            Message = Message & "Current Job: " & Text.displayNoneIfNull(Machine.getArray("Jobs")(0)) & vbCrLf & vbCrLf
         end if
         Dim order, seq
         order = Trim(InputBox(Message & "To add an order, type/scan the order and press enter. To scan all jobs as run, press 'OK' ", "Run Job(s)", "Scan W/O # to add"))
@@ -248,7 +257,7 @@ sub run()
                             runAllOrders()
                             Machine.Object.Status = "Run"
                             saveMachine(Machine)
-                            MsgBox("The Job " & getWorkOrderMessage() & " was successfully set to Run mode." & vbCrLf)
+                            endMessage = "The Job " & getWorkOrderMessage() & " was successfully set to Run mode." & vbCrLf
                         End if
                         exit sub
                     end if
@@ -965,7 +974,7 @@ end function
         end function
         public function displayNoneIfNull(text)
             if text = "null" Then
-                displayNoneIfNull = "none"
+                displayNoneIfNull = "[NONE]"
             else
                 displayNoneIfNull = text
             end if
