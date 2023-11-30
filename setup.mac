@@ -39,6 +39,9 @@ Machine.Load(getMachineServer(deviceEmployee.Object.CurrentMachine))
 
 addToMessage "", "" ' updates the current message (all the work orders
 
+Dim endMessage
+endMessage = ""
+
 Dim startedOnSignin
 if Machine.Object.MultiJob = "N" And Machine.Object.Jobs <> "<Array>null" And Machine.Object.Status = "Setup" Then
 
@@ -68,7 +71,7 @@ elseIf Machine.Object.MultiJob = "N" And Machine.Object.Jobs <> "<Array>null" An
         setupAllOrders()
         Machine.Object.Status = "Setup"
         saveMachine(Machine)
-        Msgbox("Job " + Machine.getArray("Jobs")(0) + " successfully set to SETUP mode")
+        endMessage = "Job " + Machine.getArray("Jobs")(0) + " successfully set to SETUP mode"
     end if
 else
     setup()
@@ -82,6 +85,9 @@ if startedOnSignin = True Then
     end if
 end if
 
+if endMessage <> "" Then
+    msgbox endMessage
+end if
 
 function begin()
     autECLSession.autECLOIA.WaitForAppAvailable
@@ -184,6 +190,8 @@ sub setup()
         if Machine.Object.MultiJob = "Y" Then
             Message = Message & "Jobs already setup: " & vbCrLf 
             Message = Message & displayWO() & vbCrLf & vbCrLf
+        Else
+            Message = Message & "Current Job: " & Text.displayNoneIfNull(Machine.getArray("Jobs")(0)) & vbCrLf & vbCrLf
         end if
         Dim order, seq
         order = Trim(InputBox(Message & "To add an order, type/scan the order and press enter. To scan all jobs as setup, press 'OK' ", "Setup Job(s)", "Scan W/O # to add"))
@@ -203,7 +211,7 @@ sub setup()
                         setupAllOrders()
                         Machine.Object.Status = "Setup"
                         saveMachine(Machine)
-                        MsgBox("The Following Job(s) were successfully set to SETUP mode." & vbCrLf & getWorkOrderMessage())
+                        endMessage = "The Following Job(s) were successfully set to SETUP mode." & vbCrLf & getWorkOrderMessage()
                     end if
                 end if
                 exit sub
@@ -247,7 +255,7 @@ sub setup()
                     setupAllOrders()
                     Machine.Object.Status = "Setup"
                     saveMachine(Machine)
-                    MsgBox("The Job " & getWorkOrderMessage() & " was successfully set to SETUP mode." & vbCrLf)
+                    endMessage = "The Job " & getWorkOrderMessage() & " was successfully set to SETUP mode." & vbCrLf   
                 End if
                 exit sub
             ' Else
@@ -947,7 +955,7 @@ end function
         end function
         public function displayNoneIfNull(text)
             if text = "null" Then
-                displayNoneIfNull = "none"
+                displayNoneIfNull = "[NONE]"
             else
                 displayNoneIfNull = text
             end if
