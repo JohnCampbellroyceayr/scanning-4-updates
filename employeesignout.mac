@@ -38,7 +38,15 @@ function postRequest(url, sendStr)
     postRequest = request.responseText
 end function
 
+Dim endMessage
+endMessage = ""
+
 begin
+
+if endMessage <> "" Then
+    msgbox endMessage
+end if
+
 sub begin()
 
     if Employee.Object.Number <> "null" Then
@@ -51,7 +59,7 @@ sub begin()
             If Employee.Object.CurrentMachine = "null" Then
                 logOnServer Employee.Object.Number, "Sign-Out"
                 clearCurrentEmployee()
-                msgbox(signOutMessage)
+                endMessage = signOutMessage
                 exit sub
             end if
         Else
@@ -177,7 +185,7 @@ sub signOut()
     signOutMachines(getSignedInMachines())
     logOut 3, 4
     clearCurrentEmployee()
-    msgbox(signOutMessage)
+    endMessage = signOutMessage
 end sub
 
 function getSignedInMachines()
