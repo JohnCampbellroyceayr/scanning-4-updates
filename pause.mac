@@ -38,14 +38,22 @@ Employee.Load(getEmployeeServer(deviceEmployee.Object.Number))
 Machine.Load(getMachineServer(deviceEmployee.Object.CurrentMachine))
 
 Dim startedOnSignin
+Dim endMessage
+endMessage = ""
+
 
 pause()
+
 if startedOnSignin = True Then
     if Screen.check(34, 3, "CMS Main Menu") Then
         Input.setCursor 7, 20
         Input.text("90")
         Input.key("[enter]")
     end if
+end if
+
+if endMessage <> "" Then
+    msgbox endMessage
 end if
 
 function postRequest(url, sendStr)
@@ -170,7 +178,7 @@ sub pause()
                 pauseMachine()
                 saveMachine(Machine)
                 logOut 3, 3
-                MsgBox("The Following Job(s) were PAUSED successfully. " & vbCrLf & getWorkOrderMessage())
+                endMessage = "The Following Job(s) were PAUSED successfully. " & vbCrLf & getWorkOrderMessage()
             else
                 logOut 3, 3
             end if
