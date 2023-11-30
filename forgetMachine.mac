@@ -38,13 +38,23 @@ Employee.Load(getEmployeeServer(deviceEmployee.Object.Number))
 Machine.Load(getMachineServer(deviceEmployee.Object.CurrentMachine))
 Dim startedOnSignin
 
+
+Dim endMessage
+endMessage = ""
+
 removeMachine()
+
+
 if startedOnSignin = True Then
     if Screen.check(34, 3, "CMS Main Menu") Then
         Input.setCursor 7, 20
         Input.text("90")
         Input.key("[enter]")
     end if
+end if
+
+if endMessage <> "" Then
+    msgbox endMessage
 end if
 
 function postRequest(url, sendStr)
@@ -172,7 +182,7 @@ sub removeMachine()
             end if
             On Error GoTo 0
             removeMachineFromUser(index)
-            msgbox("The following Resource has been removed successfully:" & vbCrLf & removedMachineString)
+            endMessage = "The following Resource has been removed successfully:" & vbCrLf & removedMachineString
         Else
             exit sub
         End If
