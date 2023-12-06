@@ -64,11 +64,6 @@ elseIf Machine.Object.MultiJob = "N" And Machine.Object.Jobs <> "<Array>null" An
     Dim result
     result = Msgbox(Message2 + "Job " + Machine.getArray("Jobs")(0) + " is in Setup mode, are you sure you want to switch to RUN mode?", vbYesNo)
     if result = vbYes Then
-        if Screen.check(34, 3, "CMS Main Menu") <> true Then
-            if begin() <> true Then
-                msgbox("On the incorrect screen, please try again")
-            end if
-        end if
         runAllOrders()
         Machine.Object.Status = "Run"
         saveMachine(Machine)
@@ -198,7 +193,7 @@ sub run()
         Message = Message & "Current Resource: " & Text.displayNoneIfNull(machineName) & vbCrLf
         Message = Message & "Current Status: " & Text.displayNoneIfNull(Machine.Object.Status) & vbCrLf 
         if Machine.Object.MultiJob = "Y" Then
-            Message = Message & "Setup Jobs to run: " & vbCrLf
+            Message = Message & "Current Active Jobs: " & vbCrLf
             Message = Message & displayWO() & vbCrLf & vbCrLf
         Else
             Message = Message & "Current Job: " & Text.displayNoneIfNull(Machine.getArray("Jobs")(0)) & vbCrLf & vbCrLf
@@ -211,21 +206,11 @@ sub run()
                     Dim finalWarning
                     finalWarning = msgbox("Do you want to run the following Job(s)?" & vbCrLf & getWorkOrderMessage(), vbYesNo)
                     If finalWarning = vbYes Then
-                        if Screen.check(34, 3, "CMS Main Menu") <> true Then
-                            if begin() <> true Then
-                                msgbox("On the incorrect screen, please try again")
-                                exit sub
-                            end if
-                        end if
                         autECLSession.autECLOIA.WaitForAppAvailable
-                        if Screen.check(34, 3, "CMS Main Menu") = true Then
-                            runAllOrders()
-                            Machine.Object.Status = "Run"
-                            saveMachine(Machine)
-                            MsgBox("The Following Job(s) were successfully set to RUN mode." & vbCrLf & getWorkOrderMessage())
-                        else
-                            msgbox("Something did not work")
-                        end if
+                        runAllOrders()
+                        Machine.Object.Status = "Run"
+                        saveMachine(Machine)
+                        MsgBox("The Following Job(s) were successfully set to RUN mode." & vbCrLf & getWorkOrderMessage())
                     end if
                 end if
                 exit sub
@@ -240,41 +225,30 @@ sub run()
 
             seq = GetNumeric(RemoveLeadingZeros(Trim(InputBox(Message & "To add a sequence to the order you just entered, enter the number and press enter.", "Run Job(s)", nextSeq))))
             ' If seq <> "" Then
-                if Screen.check(34, 3, "CMS Main Menu") <> true Then
-                    if begin() <> true Then
-                        msgbox("On the incorrect screen, please try again")
-                        exit sub
-                    end if
-                end if
                 autECLSession.autECLOIA.WaitForAppAvailable
-                if Screen.check(34, 3, "CMS Main Menu") = true Then
-                    Input.setCursor 7, 20
-                    if checkIfOrderNumberAlreadyEntered(order) = true Then
-                        msgbox("You cannot add the same job twice")
-                        if Machine.Object.MultiJob = "Y" Then
-                            run()
-                        else
-                            runAllOrders()
-                            Machine.Object.Status = "Run"
-                            saveMachine(Machine)
-                            endMessage = "The Job " & getWorkOrderMessage() & " was successfully set to Run mode." & vbCrLf
-                        End if
-                        exit sub
-                    end if
-                    
-                    Dim result
-                    result = Split(checkWorkOrder(order, seq), "|")
-                    if result(0) <> "false" Then
-                        addToMachine order, seq, result(0), result(1), result(2), result(3)
-                        addToMessage order, seq
+                if checkIfOrderNumberAlreadyEntered(order) = true Then
+                    msgbox("You cannot add the same job twice")
+                    if Machine.Object.MultiJob = "Y" Then
+                        run()
                     else
-                        MsgBox("Seq '" & seq & "' On Order '" & order & "' for machine '" & machineName & "' Not found")
-                    end if
-                    run()
+                        runAllOrders()
+                        Machine.Object.Status = "Run"
+                        saveMachine(Machine)
+                        endMessage = "The Job " & getWorkOrderMessage() & " was successfully set to Run mode." & vbCrLf
+                    End if
                     exit sub
-                    else
-                    msgbox("Something did not work")
                 end if
+                
+                Dim result
+                result = Split(checkWorkOrder(order, seq), "|")
+                if result(0) <> "false" Then
+                    addToMachine order, seq, result(0), result(1), result(2), result(3)
+                    addToMessage order, seq
+                else
+                    MsgBox("Seq '" & seq & "' On Order '" & order & "' for machine '" & machineName & "' Not found")
+                end if
+                run()
+                exit sub
             ' Else
             '     exit sub
             ' End If
@@ -299,6 +273,11 @@ Function GetNumeric(str)
 End Function
 
 sub runAllOrders()
+if Screen.check(34, 3, "CMS Main Menu") <> true Then
+        if begin() <> true Then
+            msgbox("On the incorrect screen, please try again")
+        end if
+    end if
     Input.setCursor 7, 20
    Dim newJobStatus
    if atLeastOneReportingSeqIsY(Split(Replace(Machine.Object.ReportingSequence, "<Array>", ""), "|")) Then
@@ -478,6 +457,7 @@ function addToMessage(order, seq)
                 str = str & "W/O: " & ordersArr(i) & " SEQ: " & seqArr(i) & vbCrLf
             end if
         next
+        str = str & vbCrLf
         str = str & "New Job(s):" & vbCrLf
         displayJobsMessage = str
     else
