@@ -257,14 +257,11 @@ sub scanPiecesOnJob(index)
                     exit sub
                 end if
             end if
-            confirm = msgbox(message2, vbYesNoCancel)
             if confirm = vbCancel Then
                 exit sub
             end if
-            if confirm = vbYes Then
-                if remaining <> 0 Then
-                    scanGoodPieces index, remaining
-                end if
+            if confirm = vbYes And remaining <> 0 Then
+                scanGoodPieces index, remaining
                 exit sub
             end if    
             numPieces = InputBox("How many piece(s) would you like to scan?", "Number of good pieces", remaining)
