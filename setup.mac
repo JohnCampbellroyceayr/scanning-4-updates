@@ -63,11 +63,6 @@ elseIf Machine.Object.MultiJob = "N" And Machine.Object.Jobs <> "<Array>null" An
     Dim result
     result = Msgbox(Message2 + "Job " + Machine.getArray("Jobs")(0) + " is in RUN mode, are you sure you want to switch to SETUP mode?", vbYesNo)
     if result = vbYes Then
-        if Screen.check(34, 3, "CMS Main Menu") <> true Then
-            if begin() <> true Then
-                msgbox("On the incorrect screen, please try again")
-            end if
-        end if
         setupAllOrders()
         Machine.Object.Status = "Setup"
         saveMachine(Machine)
@@ -188,7 +183,7 @@ sub setup()
         Message = Message & "Current Resource: " & Text.displayNoneIfNull(machineName) & vbCrLf
         Message = Message & "Current Status: " & Text.displayNoneIfNull(Machine.Object.Status) & vbCrLf
         if Machine.Object.MultiJob = "Y" Then
-            Message = Message & "Jobs already setup: " & vbCrLf 
+            Message = Message & "Jobs already setup: " & vbCrLf
             Message = Message & displayWO() & vbCrLf & vbCrLf
         Else
             Message = Message & "Current Job: " & Text.displayNoneIfNull(Machine.getArray("Jobs")(0)) & vbCrLf & vbCrLf
@@ -201,12 +196,6 @@ sub setup()
                     Dim finalWarning
                     finalWarning = msgbox("Do you want to setup the following Job(s)?" & vbCrLf & getWorkOrderMessage(), vbYesNo)
                     If finalWarning = vbYes Then
-                        if Screen.check(34, 3, "CMS Main Menu") <> true Then
-                            if begin() <> true Then
-                                msgbox("On the incorrect screen, please try again")
-                                exit sub
-                            end if
-                        end if
 
                         setupAllOrders()
                         Machine.Object.Status = "Setup"
@@ -226,13 +215,6 @@ sub setup()
             
             seq = GetNumeric(RemoveLeadingZeros(Trim(InputBox(Message & "To add a sequence to the order you just entered, enter the number and press enter.", "Setup Job(s)", nextSeq))))
             ' If seq <> "" Then
-                if Screen.check(34, 3, "CMS Main Menu") <> true Then
-                    if begin() <> true Then
-                        msgbox("On the incorrect screen, please try again")
-                        exit sub
-                    end if
-                end if
-                Input.setCursor 7, 20
                 if checkIfOrderNumberAlreadyEntered(order) = true Then
                     msgbox("You cannot add the same job twice")
                     setup()
@@ -282,6 +264,12 @@ Function GetNumeric(str)
 End Function
 
 sub setupAllOrders()
+    if Screen.check(34, 3, "CMS Main Menu") <> true Then
+        if begin() <> true Then
+            msgbox("On the incorrect screen, please try again")
+            exit sub
+        end if
+    end if
    Dim newJobStatus
    Input.setCursor 7, 20
    if atLeastOneReportingSeqIsY(Split(Replace(Machine.Object.ReportingSequence, "<Array>", ""), "|")) Then
@@ -461,6 +449,7 @@ function addToMessage(order, seq)
                 str = str & "W/O: " & ordersArr(i) & " SEQ: " & seqArr(i) & vbCrLf
             end if
         next
+        str = str & vbCrLf
         str = str & "New Job(s):" & vbCrLf
         displayJobsMessage = str
     else
