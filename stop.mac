@@ -7,7 +7,7 @@ autECLSession.SetConnectionByName(ThisSessionName)
 
 'declare classes
     Dim File
-    Set File = New FileClassFiles
+    Set File = New FileClass
     Dim Screen
     Set Screen = New ScreenClass
     Dim Input
