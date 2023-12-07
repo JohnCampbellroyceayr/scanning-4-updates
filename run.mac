@@ -199,7 +199,7 @@ sub run()
             Message = Message & "Current Job: " & Text.displayNoneIfNull(Machine.getArray("Jobs")(0)) & vbCrLf & vbCrLf
         end if
         Dim order, seq
-        order = Trim(InputBox(Message & "To add an order, type/scan the order and press enter. To scan all jobs as run, press 'OK' ", "Run Job(s)", "Scan W/O # to add"))
+        order = Trim(InputBox(Message & "To add a work order to the RUN list, type/scan the work order number and press OK." & vbcrlf & "To set all the jobs in the list to RUN mode, press OK without typing in a number.", "Run Job(s)", "Scan W/O # to add"))
         If order <> "" Then
             if InStr(order, "Scan W/O # to add") <> 0 Then
                 if Machine.Object.Jobs <> "<Array>null" Then
