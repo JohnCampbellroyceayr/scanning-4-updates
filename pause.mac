@@ -160,10 +160,11 @@ sub pause()
         Dim Message, machineName
         machineName = Machine.Object.Machine
         Dim result
-        Message = "Current sign-in: " & Text.displayNoneIfNull(Employee.Object.Number) & " " & Text.removeIfNull(Employee.Object.Name) & vbCrLf
-        Message = Message & "Current Resource: " & Text.displayNoneIfNull(machineName) & vbCrLf
-        Message = Message & "Current Status: " & Text.displayNoneIfNull(Machine.Object.Status) & vbCrLf 
-        Message = Message & "Do you want to pause this Resource?" & vbCrLf
+        Message = "Current sign-in:" & Chr(9) & Text.displayNoneIfNull(Employee.Object.Number) & " " & Text.removeIfNull(Employee.Object.Name) & vbCrLf
+        Message = Message & "Current Resource:" & Chr(9) & Text.displayNoneIfNull(machineName) & vbCrLf
+        Message = Message & "Current Status: " & Chr(9) & Text.displayNoneIfNull(Machine.Object.Status) & vbCrLf 
+        Message = Message & "Current Active Job(s): " & vbCrLf & getWorkOrderMessage() & vbCrLf
+        Message = Message & "Do you want to PAUSE this Resource?" & vbCrLf
         result = msgbox(Message, vbYesNo, "Pause Confirmation")
         If result = vbYes Then
             if Screen.check(34, 3, "CMS Main Menu") <> true Then
