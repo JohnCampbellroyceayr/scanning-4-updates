@@ -321,6 +321,7 @@ end function
 
 sub startShift(machinename, Employee)
    if logInScanning() And logInToResource(machinename) Then
+        logMachineAsRunning(Employee)
    end if
     logOut 3, 3
 end sub
