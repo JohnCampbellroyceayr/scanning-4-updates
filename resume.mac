@@ -155,34 +155,39 @@ end function
 
 sub resumeMachine()
     if Employee.Object.Number <> "null" And Machine.Object.Machine <> "null" Then
-        Dim Message, machineName
-        machineName = Machine.Object.Machine
-        Dim result
-        Message = "Current sign-in: " & Text.displayNoneIfNull(Employee.Object.Number) & " " & Text.removeIfNull(Employee.Object.Name) & vbCrLf
-        Message = Message & "Current Resource: " & Text.displayNoneIfNull(machineName) & vbCrLf
-        Message = Message & "Current Status: " & Text.displayNoneIfNull(Machine.Object.Status) & vbCrLf 
-        Message = Message & "Do you want to resume production on this machine?" & vbCrLf
-        result = msgbox(Message, vbYesNo, "Resume Confirmation")
-        If result = vbYes Then
-            if Screen.check(34, 3, "CMS Main Menu") <> true Then
-                if begin() <> true Then
-                    msgbox("On the incorrect screen, please try again")
-                    exit sub
+        if Instr(Machine.Object.Status, "Paused") Then
+            Dim Message, machineName
+            machineName = Machine.Object.Machine
+            Dim result
+            Message = "Current sign-in:" & Chr(9) & Text.displayNoneIfNull(Employee.Object.Number) & " " & Text.removeIfNull(Employee.Object.Name) & vbCrLf
+            Message = Message & "Current Resource:" & Chr(9) & Text.displayNoneIfNull(machineName) & vbCrLf
+            Message = Message & "Current Status: " & Chr(9) & Text.displayNoneIfNull(Machine.Object.Status) & vbCrLf 
+            Message = Message & "Current Active Job(s): " & vbCrLf & getWorkOrderMessage() & vbCrLf
+            Message = Message & "Do you want to RESUME production on this Resource?" & vbCrLf
+            result = msgbox(Message, vbYesNo, "Resume Confirmation")
+            If result = vbYes Then
+                if Screen.check(34, 3, "CMS Main Menu") <> true Then
+                    if begin() <> true Then
+                        msgbox("On the incorrect screen, please try again")
+                        exit sub
+                    end if
                 end if
-            end if
-            Input.setCursor 7, 20
-            if logInScanning() And logInToResource(Machine.Object.Machine) Then
-                Machine.Object.Status = Replace(Machine.Object.Status, "-Paused", "")
-                resumeMachineProd()
-                saveMachine(Machine)
-                logOut 4, 3
-                endMessage = "The Following Job(s) were RESUMED successfully. " & vbCrLf & getWorkOrderMessage()
-            else
-                logOut 4, 3
-            end if
+                Input.setCursor 7, 20
+                if logInScanning() And logInToResource(Machine.Object.Machine) Then
+                    Machine.Object.Status = Replace(Machine.Object.Status, "-Paused", "")
+                    resumeMachineProd()
+                    saveMachine(Machine)
+                    logOut 4, 3
+                    endMessage = "The Following Job(s) were RESUMED successfully. " & vbCrLf & getWorkOrderMessage()
+                else
+                    logOut 4, 3
+                end if
+            Else
+                exit sub
+            End If
         Else
-            exit sub
-        End If
+            Msgbox("Resource " & Text.displayNoneIfNull(Machine.Object.Machine) & " is not PAUSED, resuming is unnecessary")
+        End if
     else
         msgbox("You must sign-in and select a Resource")
     end if
