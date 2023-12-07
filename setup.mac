@@ -183,13 +183,13 @@ sub setup()
         Message = Message & "Current Resource: " & Text.displayNoneIfNull(machineName) & vbCrLf
         Message = Message & "Current Status: " & Text.displayNoneIfNull(Machine.Object.Status) & vbCrLf
         if Machine.Object.MultiJob = "Y" Then
-            Message = Message & "Jobs already setup: " & vbCrLf
+            Message = Message & "Current Active Jobs: " & vbCrLf
             Message = Message & displayWO() & vbCrLf & vbCrLf
         Else
             Message = Message & "Current Job: " & Text.displayNoneIfNull(Machine.getArray("Jobs")(0)) & vbCrLf & vbCrLf
         end if
         Dim order, seq
-        order = Trim(InputBox(Message & "To add an order, type/scan the order and press enter. To scan all jobs as setup, press 'OK' ", "Setup Job(s)", "Scan W/O # to add"))
+        order = Trim(InputBox(Message & "To add a work order to the SETUP list, type/scan the work order number and press OK." & vbcrlf & "To set all the jobs in the list to SETUP mode, press OK without typing in a number.", "Setup Job(s)", "Scan W/O # to add"))
         If order <> "" Then
             if InStr(order, "Scan W/O # to add") <> 0 Then
                 if Machine.Object.Jobs <> "<Array>null" Then
