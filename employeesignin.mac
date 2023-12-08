@@ -5,6 +5,8 @@ DESCRIPTION=
 OPTION EXPLICIT
 autECLSession.SetConnectionByName(ThisSessionName)
 
+autECLSession.autECLPS.SendKeys "[right]" ' this unfreezes any errors
+
 'declare classes
     Dim File
     Set File = New FileClass
