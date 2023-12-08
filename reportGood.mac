@@ -5,6 +5,8 @@ DESCRIPTION=
 OPTION EXPLICIT
 autECLSession.SetConnectionByName(ThisSessionName)
 
+autECLSession.autECLPS.SendKeys "[right]" ' this unfreezes any errors
+
 'declare classes
     Dim File
     Set File = New FileClass
@@ -79,6 +81,10 @@ function begin()
                 Input.text(user)
                 Input.key("[fldext]")
                 Input.text(password)
+                Input.key("[fldext]")
+                Input.key("[fldext]")
+                Input.key("[fldext]")
+                Input.key("[fldext]")
                 Input.key("[enter]")
                 if Screen.check(24, 1, "Attempt to Recover Interactive Job") Then
                     Input.setCursor 7, 22
@@ -211,13 +217,15 @@ sub reportGood()
     end if
 
     if Machine.Object.Jobs <> "<Array>null" Then
-        Dim scanAllFull, confirm
-        scanAllFull = msgbox("Would you like to fully scan all good pcs on all the jobs in the job list?", vbYesNo)
-        if scanAllFull = vbYes Then
-            confirm = msgbox("Please confirm again that you would like to fully scan all good pcs on all the jobs in the job list.", vbYesNo)
-            if confirm = vbYes Then
-                scanEveryWorkOrderAsFull()
-                exit sub
+        if Machine.Object.MultiJob = "Y" Then
+            Dim scanAllFull, confirm
+            scanAllFull = msgbox("Would you like to fully scan all good pcs on all the jobs in the job list?", vbYesNo)
+            if scanAllFull = vbYes Then
+                confirm = msgbox("Please confirm again that you would like to fully scan all good pcs on all the jobs in the job list.", vbYesNo)
+                if confirm = vbYes Then
+                    scanEveryWorkOrderAsFull()
+                    exit sub
+                end if
             end if
         end if
         Dim Message, machineName
