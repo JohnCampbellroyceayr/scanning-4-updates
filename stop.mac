@@ -5,6 +5,8 @@ DESCRIPTION=
 OPTION EXPLICIT
 autECLSession.SetConnectionByName(ThisSessionName)
 
+autECLSession.autECLPS.SendKeys "[right]" ' this unfreezes any errors
+
 'declare classes
     Dim File
     Set File = New FileClass
@@ -65,6 +67,10 @@ end function
 removeJobs
 sub removeJobs()
     if Employee.Object.Number <> "null" And Machine.Object.Machine <> "null" And Machine.Object.Jobs <> "<Array>null" Then
+        if Machine.Object.MultiJob = "N" Then
+            removeSingleJob()
+            exit sub
+        end if
         Dim Message, machineName
         machineName = Machine.Object.Machine
         Dim result
@@ -97,6 +103,25 @@ sub removeJobs()
         End If
     else
         msgbox("You must sign-in and select a machine and have at least 1 job in the machine")
+    end if
+end sub
+
+
+sub removeSingleJob()
+    Dim message, result, WOPartNumber
+    message = "Current sign-in:" & Chr(9) & Text.displayNoneIfNull(Employee.Object.Number) & " " & Text.removeIfNull(Employee.Object.Name) & vbCrLf
+    message = message & "Current Resource:" & Chr(9) & Machine.Object.Machine & vbCrLf
+    message = message & "Current Status:" & Chr(9) & Machine.Object.Status & vbCrLf
+    message = message & "Current Active Job:" & vbCrLf
+    WOPartNumber = "WO " & Machine.getArray("Jobs")(0) & " (" & Machine.getArray("PartNumbers")(0) & ")" & vbCrLf
+    message = message & WOPartNumber
+    message = message & vbCrLf
+    message = message & "Would you like to stop running this job on this machine?"
+    result = msgbox(message, vbYesNo)
+    if result = vbYes then
+        removeFromMachine(0)
+        saveMachine(Machine)
+        msgbox("The following job has been removed: " & vbcrlf & WOPartNumber)
     end if
 end sub
 
