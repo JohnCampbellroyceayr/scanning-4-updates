@@ -321,8 +321,10 @@ function scanAsRun(MachineValues, Employee)
    Dim i
    for i = 0 to UBound(jobsArray) step 1
       if reportArray(i) = "Y" Then
+        if i = UBound(jobsArray) then
+            logAsRun jobsArray(i), seqArray(i)
+        end if
          if scanOrderAsRun(jobsArray(i), seqArray(i), Employee) Then
-
          else
             exit function
          end if
@@ -404,6 +406,24 @@ function scanOrderAsRun(job, seq, employee)
    end if
 end function
 
+function logAsRun(order, seq)
+    if Trim(Screen.text(42, 12, 11)) = "0" Then
+        Input.text("10000")
+        Input.key("[enter]")
+        Input.key("[enter]")
+    end if
+    Input.text("10151")
+    Input.key("[enter]")
+    Input.text(order)
+    Input.chop order, 10
+    Input.text(seq)
+    Input.chop seq, 3
+    Input.key("[enter]")
+    Input.key("[enter]")
+    if Screen.check(36, 5, "Error!") Then
+        Input.key("[pf1]")
+    end if
+end function
 
 function atLeastOneReportingSeqIsY(reporting)
    Dim element
