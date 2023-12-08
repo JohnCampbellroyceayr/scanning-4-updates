@@ -313,9 +313,10 @@ function scanAsSetup(MachineValues, Employee)
    Dim i
    for i = 0 to UBound(jobsArray) step 1
       if reportArray(i) = "Y" Then
-         ' if Not checkAllreadySetUp(i, statusArray) Then
+            if i = UBound(jobsArray) then
+                logAsSetup jobsArray(i), seqArray(i)
+            end if
          if scanOrderAsSetup(jobsArray(i), seqArray(i), Employee) Then
-
          else
             exit function
          end if
@@ -387,13 +388,31 @@ function scanOrderAsSetup(job, seq, employee)
          Input.chop seq, 3
          Input.key("[enter]")
          if Trim(Screen.text(29, 13, 10)) = "" Then
-            ' Input.key("[pf1]")
             scanOrderAsSetup = true
          elseif Not Screen.check(36, 7, "Setup Mode") Then
             scanOrderAsSetup = true
          end if
       end if
    end if
+end function
+
+function logAsSetup(order, seq)
+    if Trim(Screen.text(42, 12, 11)) = "0" Then
+        Input.text("10000")
+        Input.key("[enter]")
+        Input.key("[enter]")
+    end if
+    Input.text("10051")
+    Input.key("[enter]")
+    Input.text(order)
+    Input.chop order, 10
+    Input.text(seq)
+    Input.chop seq, 3
+    Input.key("[enter]")
+    Input.key("[enter]")
+    if Screen.check(36, 5, "Error!") Then
+        Input.key("[pf1]")
+    end if
 end function
 
 
