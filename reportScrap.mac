@@ -182,10 +182,15 @@ sub reportScrapSingleMode()
 end sub
 
 sub insertWorkOrder()
-    Dim order, seq, machineName
+    Dim order, seq, machineName, message
+
+    message = "Current sign-in:" & Chr(9) & Text.displayNoneIfNull(Employee.Object.Number) & " " & Text.removeIfNull(Employee.Object.Name) & vbCrLf
+    message = message & "Current Resource:" & Chr(9) & Machine.Object.Machine & vbCrLf
+    message = message & vbCrLf
+    message = message & "Please type/scan the work order number to report SCRAP."
 
     machineName = Machine.Object.Machine
-    order = Trim(InputBox("To add an order, type/scan the order and press enter. ", "Enter Job(s)"))
+    order = Trim(InputBox(message, "Report Scrap", "[Scan W/O # to add]"))
 
     Dim nextSeq, dep, res
 
@@ -200,7 +205,7 @@ sub insertWorkOrder()
 
     if result(0) <> "false" Then
         addToMachine order, seq, result(0), result(1), result(2), result(3)
-        reportScrap
+        scanScrapPiecesOnJob(Ubound(Machine.getArray("Jobs")))
     else
         MsgBox("Seq '" & seq & "' On Order '" & order & "' for machine '" & machineName & "' Not found")
         exit sub
@@ -236,24 +241,7 @@ sub reportScrap()
         exit sub
     end if
 
-    if Machine.Object.Jobs <> "<Array>null" Then
-        Dim Message, machineName
-        machineName = Machine.Object.Machine
-        Dim result
-        If Machine.Object.MultiJob = "N" Then
-            reportScrapSingleMode
-            exit sub
-        End if
-        
-        Dim i, numJobs
-        for i = 0 to UBound(Machine.getArray("Jobs"))
-            if scanScrapPiecesOnJob(i) = True Then
-                exit for
-            End if
-        next
-    else
-        insertWorkOrder()
-    end if
+    insertWorkOrder()
 end sub
 
 Function scanScrapPiecesOnJob(index)
