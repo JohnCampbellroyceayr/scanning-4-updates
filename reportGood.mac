@@ -211,6 +211,15 @@ sub reportGood()
     end if
 
     if Machine.Object.Jobs <> "<Array>null" Then
+        Dim scanAllFull, confirm
+        scanAllFull = msgbox("Would you like to fully scan all good pcs on all the jobs in the job list?", vbYesNo)
+        if scanAllFull = vbYes Then
+            confirm = msgbox("Please confirm again that you would like to fully scan all good pcs on all the jobs in the job list.", vbYesNo)
+            if confirm = vbYes Then
+                scanEveryWorkOrderAsFull()
+                exit sub
+            end if
+        end if
         Dim Message, machineName
         machineName = Machine.Object.Machine
         Dim result
@@ -232,39 +241,89 @@ sub reportGood()
     end if
 end sub
 
+
+sub scanEveryWorkOrderAsFull()
+
+    Dim i, numJobs, remaining
+
+    if atLeastOneReportingSeqIsY(Machine.getArray("ReportingSequence")) Then
+        if Screen.check(34, 3, "CMS Main Menu") <> true Then
+            if begin() <> true Then
+                msgbox("On the incorrect screen, please try again")
+                exit sub
+            end if
+        end if
+
+        if logInScanning() And logInToResource(Machine.Object.Machine) Then
+            for i = 0 to UBound(Machine.getArray("Jobs"))
+                if Ubound(Machine.getArray("Jobs")) >= i Then
+                    if Machine.getArray("ReportingSequence")(i) = "Y" Then
+                        remaining = CStr(getRemainingPieces(i))
+                        if remaining <> "0" Then
+                            scanWorkOrderByMachineJobIndexAsFullYReport(i)
+                        end if
+                        removeFromMachine(i)
+                        i = i - 1
+                    end if
+                else
+                    exit for
+                end if
+            next
+        end if
+        logOut 4, 3
+
+    end if
+    if atLeastOneReportingSeqIsN(Machine.getArray("ReportingSequence")) Then
+        if logInScanNoReport() Then
+            for i = 0 to UBound(Machine.getArray("Jobs"))
+                if Ubound(Machine.getArray("Jobs")) >= i Then
+                    if Machine.getArray("ReportingSequence")(i) = "N" Then
+                        remaining = CStr(getRemainingPieces(i))
+                        scanGoodPiecesOrderNoReport Machine.getArray("Jobs")(i), Machine.Object.Machine, Employee.Object.Number, remaining
+                        removeFromMachine(i)
+                        i = i - 1
+                    end if
+                else
+                    exit for
+                end if
+            next
+        end if
+    end if
+    logOut 4, 3
+    saveMachine(Machine)
+    endMessage = "Successfully scanned remaining on all jobs"
+end sub
+
+sub scanWorkOrderByMachineJobIndexAsFullYReport(i)
+    Dim jobs, seq
+    jobs = Machine.getArray("Jobs")
+    seq = Machine.getArray("Sequences")
+    if i <= UBound(jobs) Then
+        Dim reportSeq
+        reportSeq = Machine.getArray("ReportingSequence")
+        if reportSeq(i) = "Y" Then
+            logAsRun jobs(i), seq(i)
+            logInGeneral(Employee.Object.Number)
+            scan(CStr(getRemainingPieces(i)))
+        end if
+    end if
+end sub
+
 sub scanPiecesOnJob(index)
     if UBound(Machine.getArray("Jobs")) >= index Then
-        if Msgbox("Do you want to scan good pieces on " & Machine.getArray("Jobs")(index) & "?", vbYesNo) = vbYes Then
+        if Msgbox("Would you like to report Good Pieces for Work Order " & Machine.getArray("Jobs")(index) & " (Part Number: " & Machine.getArray("PartNumbers")(index) & ")?", vbYesNo) = vbYes Then
             Dim confirm, numPieces, numberOfPieces, message2, remaining
             remaining = CStr(getRemainingPieces(index))
-            message2 = "Job " & Machine.getArray("Jobs")(index) & " seq " & Machine.getArray("Sequences")(index) & " requires " & Machine.getArray("PiecesNeeded")(index) & " piece(s) total. " & vbCrLf
-            message2 = message2 & Machine.getArray("GoodPieces")(index) & " have been reported so far." & vbCrLf
-            if remaining <> "0" Then
-                message2 = message2 & "Would you like to report the remaining " & remaining & " piece(s) GOOD?"
-                confirm = msgbox(message2, vbYesNoCancel)
-                if confirm = vbYes Then
-                    if remaining <> 0 Then
-                        scanGoodPieces 0, remaining
-                    end if
-                    exit sub
-                elseif confirm = vbCancel Then
-                    exit sub
-                end if
-            else
-                message2 = message2 & "Would you like to scan more than the required amount?"
-                confirm = msgbox(message2, vbYesNo)
-                if confirm = vbNo Then
-                    exit sub
-                end if
-            end if
-            if confirm = vbCancel Then
-                exit sub
-            end if
-            if confirm = vbYes And remaining <> 0 Then
-                scanGoodPieces index, remaining
-                exit sub
-            end if    
-            numPieces = InputBox("How many piece(s) would you like to scan?", "Number of good pieces", remaining)
+
+            message2 = "Quantity Required" & Chr(9) & Machine.getArray("PiecesNeeded")(index) & vbCrLf
+            message2 = message2 & "Quantity Completed" & Chr(9) & Machine.getArray("GoodPieces")(index) & vbCrLf
+            message2 = message2 & "-------------------------------------" & vbCrLf 
+            message2 = message2 & "Quantity Needed" & Chr(9) & remaining & vbCrLf & vbCrLf
+
+            message2 = message2 & "Please input the number of pieces you would like to scan Good."
+
+            numPieces = InputBox(message2, Machine.getArray("Jobs")(index) & " (Part Number: " & Machine.getArray("PartNumbers")(index) & ")", remaining)
+
             On Error Resume Next
             numberOfPieces = CInt(numPieces)
             If Err.Number <> 0 Or numberOfPieces < 1 Or InStr(numPieces, ".") Then
@@ -328,6 +387,12 @@ function getRemainingPieces(index)
 end function
 
 function scanGoodPieces(index, number)
+    if index > UBound(Machine.getArray("Jobs")) Then
+        exit function
+    end if
+    if number = 0 or number = "0" Then
+        exit function
+    end if
     if Screen.check(34, 3, "CMS Main Menu") <> true Then
         if begin() <> true Then
             msgbox("On the incorrect screen, please try again")
@@ -355,7 +420,6 @@ function scanGoodPieces(index, number)
     Dim i, str, tooManyPieces
     str = "<Array>"
     tooManyPieces = false
-    'Hello, Future self, all you need to do is 1) add the good pieces and 2) delete is there is more or = then needed.
     for i = 0 to UBound(goodPieces) step 1
         if i = index Then
             if CInt(goodPieces(i)) + CInt(number) >= CInt(neededPieces(i)) Then
@@ -442,7 +506,7 @@ function logInGeneral(employee)
    end if
 end function
 
-function scan(amount) 
+function scan(amount)
     Input.text("40005")
     Input.key("[enter]")
     Input.text(amount)
