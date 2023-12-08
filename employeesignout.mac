@@ -5,6 +5,9 @@ DESCRIPTION=
 OPTION EXPLICIT
 autECLSession.SetConnectionByName(ThisSessionName)
 
+
+autECLSession.autECLPS.SendKeys "[right]" ' this unfreezes any errors
+
 'declare classes
     Dim File
     Set File = New FileClass
@@ -83,6 +86,10 @@ sub begin()
                 Input.text(user)
                 Input.key("[fldext]")
                 Input.text(password)
+                Input.key("[fldext]")
+                Input.key("[fldext]")
+                Input.key("[fldext]")
+                Input.key("[fldext]")
                 Input.key("[enter]")
                 if Screen.check(24, 1, "Attempt to Recover Interactive Job") Then
                     Input.setCursor 7, 22
