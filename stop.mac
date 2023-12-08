@@ -70,8 +70,8 @@ sub removeJobs()
         Dim result
         Message = "Current sign-in: " & Text.displayNoneIfNull(Employee.Object.Number) & " " & Text.removeIfNull(Employee.Object.Name) & vbCrLf
         Message = Message & "Current Machine: " & Text.displayNoneIfNull(machineName) & vbCrLf
-        Message = Message & "Current Status: " & Text.displayNoneIfNull(Machine.Object.Status) & vbCrLf 
-        Message = Message & "Press the index of the job you want to remove." & vbCrLf
+        Message = Message & "Current Status: " & Text.displayNoneIfNull(Machine.Object.Status) & vbCrLf & vbCrLf
+        Message = Message & "Follow the instructions to remove a job from the Active list" & vbCrLf
         Message = Message & displayOrders() & vbCrLf
         result = InputBox(Message, "End Jobs")
         If Trim(result) <> "" Then
@@ -122,12 +122,12 @@ Function RemoveElementFromArray(arr, index)
 End Function
 
 function displayOrders()
-    Dim ordersArr, seqArr, i, str
+    Dim ordersArr, partArr, i, str
     ordersArr = Split(Replace(Machine.Object.Jobs, "<Array>", ""), "|")
-    seqArr = Split(Replace(Machine.Object.Sequences, "<Array>", ""), "|")
+    partArr = Split(Replace(Machine.Object.PartNumbers, "<Array>", ""), "|")
     for i = 0 to UBound(ordersArr) step 1
         if ordersArr(i) <> "null" Then
-            str = str & "Enter " & CStr(i + 1) & " to remove W/O: " & ordersArr(i) & " SEQ: " & seqArr(i) & vbCrLf
+            str = str & "Enter " & CStr(i + 1) & " to remove W/O: " & ordersArr(i) & " (" & partArr(i) & ")" & vbCrLf
         end if
     next
     displayOrders = str
